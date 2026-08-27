@@ -182,11 +182,12 @@ Food Safety/
 │   │   ├── env.py
 │   │   ├── script.py.mako
 │   │   └── versions/
-│   │       ├── 001_initial_schema.py
-│   │       ├── 002_add_businesses.py
-│   │       ├── 003_add_complaints.py
-│   │       ├── 004_add_evidence.py
-│   │       ├── 005_add_inspections.py
+│   │       ├── 0536e568a656_add_users_divisions_districts_staff_.py
+│   │       ├── 5867bff9f79e_add_complaint_management_tables.py
+│   │       ├── 014114ea0cea_add_postgis_and_location_columns.py
+│   │       ├── 30824dc06f71_add_inspection_assignment_workflow.py
+│   │       ├── 18b2ad6af96d_add_complaint_triage_results.py
+│   │       ├── 09b78bb3d711_add_evidence_analysis_results.py
 │   │       └── ...
 │   │
 │   └── app/
@@ -197,100 +198,104 @@ Food Safety/
 │       │   ├── security.py
 │       │   ├── database.py
 │       │   ├── dependencies.py
-│       │   └── logging.py
+│       │   ├── logging.py
+│       │   ├── gemini.py          # centralized Gemini client (see app.services.ai_service)
+│       │   └── geo_types.py
 │       │
 │       ├── models/
 │       │   ├── __init__.py
 │       │   ├── user.py
-│       │   ├── role.py
 │       │   ├── division.py
 │       │   ├── district.py
 │       │   ├── staff_profile.py
 │       │   ├── business.py
 │       │   ├── complaint.py
 │       │   ├── complaint_category.py
+│       │   ├── complaint_sequence.py
+│       │   ├── complaint_status_history.py
+│       │   ├── complaint_triage.py    # Phase 6 advisory result, see DATABASE_SCHEMA.md sec 20
 │       │   ├── evidence.py
+│       │   ├── evidence_analysis.py   # Phase 7 advisory result, see DATABASE_SCHEMA.md sec 20
+│       │   ├── assignment.py
 │       │   ├── inspection.py
 │       │   ├── inspection_finding.py
-│       │   ├── assignment.py
-│       │   ├── notification.py
-│       │   ├── audit_log.py
-│       │   ├── document.py
-│       │   └── document_chunk.py
+│       │   └── audit_log.py
 │       │
 │       ├── schemas/
 │       │   ├── auth.py
 │       │   ├── user.py
-│       │   ├── division.py
+│       │   ├── staff.py
 │       │   ├── district.py
 │       │   ├── business.py
 │       │   ├── complaint.py
+│       │   ├── complaint_category.py
+│       │   ├── complaint_status_history.py
 │       │   ├── evidence.py
 │       │   ├── inspection.py
-│       │   ├── agent.py
+│       │   ├── assignment.py
+│       │   ├── agent.py           # ComplaintTriageRead, EvidenceAnalysisRead
 │       │   └── common.py
 │       │
 │       ├── api/
 │       │   ├── router.py
+│       │   ├── health.py
+│       │   ├── businesses.py
+│       │   ├── reference.py
 │       │   ├── auth/
 │       │   ├── citizen/
-│       │   ├── officer/
-│       │   ├── inspector/
-│       │   ├── admin/
-│       │   └── agent/
+│       │   ├── officer/           # includes /triage and /evidence/{id}/analysis endpoints
+│       │   ├── inspector/         # includes /evidence/{id}/analysis endpoints
+│       │   └── admin/
 │       │
 │       ├── services/
 │       │   ├── auth_service.py
+│       │   ├── staff_service.py
 │       │   ├── complaint_service.py
+│       │   ├── complaint_category_service.py
 │       │   ├── business_service.py
+│       │   ├── district_service.py
+│       │   ├── geocoding_service.py
 │       │   ├── inspection_service.py
 │       │   ├── assignment_service.py
-│       │   ├── notification_service.py
-│       │   ├── storage_service.py
-│       │   └── report_service.py
+│       │   ├── evidence_service.py
+│       │   ├── storage_service.py     # Supabase Storage: upload/download/signed URLs
+│       │   └── ai_service.py          # centralized Gemini text/structured/multimodal wrapper
 │       │
 │       ├── repositories/
 │       │   ├── user_repository.py
+│       │   ├── staff_repository.py
+│       │   ├── division_repository.py
 │       │   ├── district_repository.py
 │       │   ├── business_repository.py
 │       │   ├── complaint_repository.py
+│       │   ├── complaint_category_repository.py
+│       │   ├── complaint_sequence_repository.py
+│       │   ├── complaint_status_history_repository.py
+│       │   ├── complaint_triage_repository.py
+│       │   ├── evidence_repository.py
+│       │   ├── evidence_analysis_repository.py
+│       │   ├── assignment_repository.py
 │       │   ├── inspection_repository.py
-│       │   └── document_repository.py
+│       │   ├── inspection_finding_repository.py
+│       │   └── audit_log_repository.py
 │       │
 │       ├── agents/
-│       │   ├── orchestrator.py
-│       │   ├── state.py
 │       │   ├── complaint_triage/
-│       │   ├── evidence_analysis/
-│       │   ├── investigation/
-│       │   ├── inspector_assistant/
-│       │   └── report_generation/
-│       │
-│       ├── rag/
-│       │   ├── ingestion/
-│       │   ├── embeddings/
-│       │   ├── retrieval/
-│       │   └── knowledge_base/
-│       │
-│       ├── tools/
-│       │   ├── complaint_tools.py
-│       │   ├── business_tools.py
-│       │   ├── inspection_tools.py
-│       │   ├── database_tools.py
-│       │   ├── rag_tools.py
-│       │   ├── evidence_tools.py
-│       │   └── report_tools.py
+│       │   │   └── agent.py       # Phase 6 - module functions, not a class
+│       │   └── evidence_analysis/
+│       │       └── agent.py       # Phase 7 - module functions, not a class
 │       │
 │       ├── utils/
 │       │   ├── enums.py
 │       │   ├── validators.py
-│       │   ├── helpers.py
+│       │   ├── geo.py
 │       │   └── exceptions.py
 │       │
 │       └── tests/
+│           ├── conftest.py
+│           ├── factories.py
 │           ├── unit/
-│           ├── integration/
-│           └── ai/
+│           └── integration/
 │
 ├── data/
 │   ├── raw/
@@ -321,6 +326,28 @@ Food Safety/
         ├── backend-ci.yml
         └── deploy.yml
 ```
+
+---
+
+## Build Status Note
+
+The tree above is updated through Phase 7 (Evidence Analysis Agent) for the
+`backend/app/` subtree specifically, since that is what recent phases
+actually touch. A few items shown are still aspirational rather than built
+yet:
+
+- `data/`, `scripts/`, `nginx/`, and `.github/` do not exist in the
+  repository yet.
+- `backend/app/agents/` currently contains only `complaint_triage/` (Phase 6)
+  and `evidence_analysis/` (Phase 7), each as plain module functions - there
+  is no `orchestrator.py`, `state.py`, `investigation/`,
+  `inspector_assistant/`, or `report_generation/` yet (see
+  `docs/DEVELOPMENT_ROADMAP.md` for when those are planned).
+- `backend/app/rag/` and `backend/app/tools/` do not exist yet (Phase 8+).
+- `notifications`/`document`/`document_chunk` models do not exist yet.
+
+Update this note (or remove it once the tree is fully current again) the
+next time a phase changes backend structure.
 
 ---
 

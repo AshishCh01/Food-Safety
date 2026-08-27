@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-function EvidenceUploader({ evidence, onUpload, readOnly = false }) {
+function EvidenceUploader({ evidence, onUpload, readOnly = false, renderExtra }) {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -50,6 +50,7 @@ function EvidenceUploader({ evidence, onUpload, readOnly = false }) {
               <span className="evidence-meta">
                 {item.file_type} &middot; {Math.round(item.file_size / 1024)} KB
               </span>
+              {renderExtra && renderExtra(item)}
             </li>
           ))}
         </ul>

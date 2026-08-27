@@ -103,9 +103,14 @@ POST /officer/complaints/{complaint_id}/reject
 POST /officer/complaints/{complaint_id}/assign
 GET  /officer/inspectors
 GET  /officer/analytics
+POST /officer/complaints/{complaint_id}/triage
+GET  /officer/complaints/{complaint_id}/triage
+POST /officer/complaints/{complaint_id}/evidence/{evidence_id}/analysis
+GET  /officer/complaints/{complaint_id}/evidence/{evidence_id}/analysis
 ```
 
-All officer endpoints automatically scope operational data to the officer's district.
+See section 11 for the agent endpoints. All officer endpoints automatically
+scope operational data to the officer's district.
 
 ## 9. Inspector Endpoints
 
@@ -117,6 +122,8 @@ POST /inspector/inspections
 PATCH /inspector/inspections/{inspection_id}
 POST /inspector/inspections/{inspection_id}/findings
 POST /inspector/inspections/{inspection_id}/evidence
+POST /inspector/inspections/{inspection_id}/evidence/{evidence_id}/analysis
+GET  /inspector/inspections/{inspection_id}/evidence/{evidence_id}/analysis
 POST /inspector/inspections/{inspection_id}/complete
 GET  /inspector/history
 ```
@@ -143,15 +150,33 @@ Admin actions require elevated permissions and should create audit records.
 
 Do not expose internal agent tools directly as public APIs.
 
-Example user-facing endpoints:
+As implemented (Phase 6 Complaint Triage, Phase 7 Evidence Analysis), agent
+endpoints are nested under the owning resource rather than under a flat
+top-level `/agent/*` namespace, so the same authorization/scope dependency
+that resolves the resource (`get_complaint_for_officer`,
+`get_inspection_for_inspector`, ...) always runs before the agent is ever
+called:
 
 ```text
-POST /agent/complaint-triage
-POST /agent/evidence-analysis
-POST /agent/investigation-assistant
-POST /agent/inspector-assistant
-POST /agent/generate-report
+POST /officer/complaints/{complaint_id}/triage
+GET  /officer/complaints/{complaint_id}/triage
+
+POST /officer/complaints/{complaint_id}/evidence/{evidence_id}/analysis
+GET  /officer/complaints/{complaint_id}/evidence/{evidence_id}/analysis
+
+POST /inspector/inspections/{inspection_id}/evidence/{evidence_id}/analysis
+GET  /inspector/inspections/{inspection_id}/evidence/{evidence_id}/analysis
 ```
+
+`POST` explicitly triggers a new agent run (never automatic on view); `GET`
+reads the latest persisted result without calling the AI provider again. For
+evidence analysis, `POST` also accepts `?force=true` to explicitly re-run the
+agent even when a completed result already exists - without it, an existing
+completed result is returned as-is rather than calling the AI provider again.
+
+Future agents (Investigation Agent, Inspector Assistant, Report Generation)
+should follow the same nested-under-resource convention rather than a flat
+`/agent/*` path.
 
 These endpoints must validate role and scope before the agent is invoked.
 

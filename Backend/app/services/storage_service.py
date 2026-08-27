@@ -9,7 +9,7 @@ can monkeypatch them without hitting the network.
 import httpx
 
 from app.core.config import get_settings
-from app.utils.exceptions import EvidenceUploadError
+from app.utils.exceptions import EvidenceDownloadError, EvidenceUploadError
 
 
 def _headers() -> dict[str, str]:
@@ -32,6 +32,18 @@ def upload_file(bucket: str, path: str, content: bytes, content_type: str) -> st
     if response.status_code not in (200, 201):
         raise EvidenceUploadError(f"Storage upload failed with status {response.status_code}.")
     return path
+
+
+def download_file(bucket: str, path: str) -> bytes:
+    """Fetches the raw bytes of an already-uploaded object, e.g. so an AI agent
+    can pass evidence content to Gemini. Uses the same private-bucket,
+    service-role-key access as upload_file."""
+    settings = get_settings()
+    url = f"{settings.supabase_url}/storage/v1/object/{bucket}/{path}"
+    response = httpx.get(url, headers=_headers(), timeout=30.0)
+    if response.status_code != 200:
+        raise EvidenceDownloadError(f"Storage download failed with status {response.status_code}.")
+    return response.content
 
 
 def create_signed_url(bucket: str, path: str, expires_in: int = 300) -> str:

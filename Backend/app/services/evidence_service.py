@@ -8,11 +8,12 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.complaint import Complaint
 from app.models.evidence import Evidence
+from app.models.inspection import Inspection
 from app.repositories import evidence_repository
 from app.schemas.evidence import EvidenceRead
 from app.services import storage_service
 from app.utils.enums import ComplaintStatus
-from app.utils.exceptions import ConflictError
+from app.utils.exceptions import ConflictError, EvidenceNotFoundError
 from app.utils.geo import validate_coordinates
 from app.utils.validators import validate_evidence_file
 
@@ -69,6 +70,30 @@ def upload_evidence(
         latitude=latitude,
         longitude=longitude,
     )
+
+
+def get_evidence_bytes(evidence: Evidence) -> bytes:
+    """Fetches the raw file content of an already-uploaded evidence item, e.g.
+    so an AI agent can pass it to Gemini for analysis."""
+    return storage_service.download_file(evidence.storage_bucket, evidence.storage_path)
+
+
+def get_evidence_for_officer(db: Session, complaint: Complaint, evidence_id: uuid.UUID) -> Evidence:
+    """Resolves an evidence item scoped to a complaint the caller has already
+    verified belongs to the officer's district (see complaint_service.get_complaint_for_officer)."""
+    evidence = evidence_repository.get_by_id(db, evidence_id)
+    if evidence is None or evidence.complaint_id != complaint.id:
+        raise EvidenceNotFoundError()
+    return evidence
+
+
+def get_evidence_for_inspector(db: Session, inspection: Inspection, evidence_id: uuid.UUID) -> Evidence:
+    """Resolves an evidence item scoped to an inspection the caller has already
+    verified belongs to the inspector (see inspection_service.get_inspection_for_inspector)."""
+    evidence = evidence_repository.get_by_id(db, evidence_id)
+    if evidence is None or evidence.inspection_id != inspection.id:
+        raise EvidenceNotFoundError()
+    return evidence
 
 
 def list_evidence_with_urls(db: Session, complaint_id: uuid.UUID) -> list[EvidenceRead]:

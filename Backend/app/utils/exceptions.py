@@ -125,6 +125,21 @@ class FileTooLargeError(AppError):
         super().__init__(message)
 
 
+class EvidenceDownloadError(AppError):
+    code = "EVIDENCE_DOWNLOAD_FAILED"
+    status_code = 502
+
+    def __init__(self, message: str = "Could not retrieve the evidence file from storage.") -> None:
+        super().__init__(message)
+
+
+class EvidenceNotFoundError(NotFoundError):
+    code = "EVIDENCE_NOT_FOUND"
+
+    def __init__(self, message: str = "Evidence was not found.") -> None:
+        super().__init__(message)
+
+
 class AssignmentNotFoundError(NotFoundError):
     code = "ASSIGNMENT_NOT_FOUND"
 
@@ -159,4 +174,60 @@ class DistrictNotResolvableError(AppError):
     status_code = 422
 
     def __init__(self, message: str = "Could not determine a district for the supplied location.") -> None:
+        super().__init__(message)
+
+
+class GeminiRateLimitedError(AppError):
+    """Raised when the Gemini API rejects a request for exceeding its rate
+    limit. Retryable - see app.agents.complaint_triage.agent for the
+    retry policy."""
+
+    code = "GEMINI_RATE_LIMITED"
+    status_code = 429
+
+    def __init__(self, message: str = "The AI service is receiving too many requests. Please try again shortly.") -> None:
+        super().__init__(message)
+
+
+class GeminiUnavailableError(AppError):
+    """Raised for Gemini server errors, timeouts, or other transport-level
+    failures. Retryable."""
+
+    code = "GEMINI_UNAVAILABLE"
+    status_code = 503
+
+    def __init__(self, message: str = "The AI service is temporarily unavailable. Please try again shortly.") -> None:
+        super().__init__(message)
+
+
+class GeminiRequestError(AppError):
+    """Raised for non-retryable Gemini request failures (e.g. an invalid
+    request rejected by the API for reasons other than rate limiting)."""
+
+    code = "GEMINI_REQUEST_FAILED"
+    status_code = 502
+
+    def __init__(self, message: str = "The AI service could not process this request.") -> None:
+        super().__init__(message)
+
+
+class InvalidAiResponseError(AppError):
+    code = "INVALID_AI_RESPONSE"
+    status_code = 502
+
+    def __init__(self, message: str = "The AI service returned a response that could not be validated.") -> None:
+        super().__init__(message)
+
+
+class TriageNotFoundError(NotFoundError):
+    code = "TRIAGE_NOT_FOUND"
+
+    def __init__(self, message: str = "No AI triage analysis exists for this complaint yet.") -> None:
+        super().__init__(message)
+
+
+class EvidenceAnalysisNotFoundError(NotFoundError):
+    code = "EVIDENCE_ANALYSIS_NOT_FOUND"
+
+    def __init__(self, message: str = "No AI evidence analysis exists for this evidence item yet.") -> None:
         super().__init__(message)

@@ -4,9 +4,11 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.agents.evidence_analysis import agent as evidence_analysis_agent
 from app.core.database import get_db
 from app.core.dependencies import get_current_staff_profile, require_inspector
 from app.models.staff_profile import StaffProfile
+from app.schemas.agent import EvidenceAnalysisRead
 from app.schemas.assignment import AssignmentRead, AssignmentSummary, PaginatedAssignments
 from app.schemas.evidence import EvidenceRead
 from app.schemas.inspection import (
@@ -20,6 +22,7 @@ from app.schemas.inspection import (
 )
 from app.services import assignment_service, evidence_service, inspection_service
 from app.utils.enums import AssignmentStatus, InspectionStatus
+from app.utils.exceptions import EvidenceAnalysisNotFoundError
 
 router = APIRouter(prefix="/inspector", tags=["inspector"], dependencies=[Depends(require_inspector)])
 
@@ -158,6 +161,45 @@ def list_inspection_evidence(
 ) -> list[EvidenceRead]:
     inspection = inspection_service.get_inspection_for_inspector(db, staff.id, inspection_id)
     return evidence_service.list_inspection_evidence_with_urls(db, inspection.id)
+
+
+@router.post(
+    "/inspections/{inspection_id}/evidence/{evidence_id}/analysis", response_model=EvidenceAnalysisRead
+)
+def run_inspection_evidence_analysis(
+    inspection_id: uuid.UUID,
+    evidence_id: uuid.UUID,
+    force: bool = Query(default=False),
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> EvidenceAnalysisRead:
+    """Explicitly triggers the AI Evidence Analysis Agent for an evidence item
+    on the inspector's own inspection. Advisory only - see
+    docs/AI_AGENTS_ARCHITECTURE.md section 5. Returns a cached result if one
+    already exists unless `force=true` is passed."""
+    inspection = inspection_service.get_inspection_for_inspector(db, staff.id, inspection_id)
+    evidence = evidence_service.get_evidence_for_inspector(db, inspection, evidence_id)
+    analysis = evidence_analysis_agent.run_analysis(db, staff, evidence, force=force)
+    return evidence_analysis_agent.to_analysis_read(analysis)
+
+
+@router.get(
+    "/inspections/{inspection_id}/evidence/{evidence_id}/analysis", response_model=EvidenceAnalysisRead
+)
+def get_inspection_evidence_analysis(
+    inspection_id: uuid.UUID,
+    evidence_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> EvidenceAnalysisRead:
+    """Reads the most recent AI evidence analysis result, if any, without
+    calling Gemini again."""
+    inspection = inspection_service.get_inspection_for_inspector(db, staff.id, inspection_id)
+    evidence = evidence_service.get_evidence_for_inspector(db, inspection, evidence_id)
+    analysis = evidence_analysis_agent.get_latest_analysis(db, evidence.id)
+    if analysis is None:
+        raise EvidenceAnalysisNotFoundError()
+    return evidence_analysis_agent.to_analysis_read(analysis)
 
 
 @router.post("/inspections/{inspection_id}/complete", response_model=InspectionRead)

@@ -3,9 +3,11 @@ import { useParams } from 'react-router-dom';
 import ComplaintStatus from '../../components/complaint/ComplaintStatus';
 import { formatStatusLabel } from '../../utils/complaintStatus';
 import EvidenceUploader from '../../components/complaint/EvidenceUploader';
+import EvidenceAnalysisPanel from '../../components/agent/EvidenceAnalysisPanel';
 import FindingForm from '../../components/inspection/FindingForm';
 import FindingList from '../../components/inspection/FindingList';
 import { useAuth } from '../../hooks/useAuth';
+import { getInspectionEvidenceAnalysis, runInspectionEvidenceAnalysis } from '../../services/agentService';
 import {
   addFinding,
   completeInspection,
@@ -24,17 +26,33 @@ function InspectionDetails() {
   const [evidence, setEvidence] = useState([]);
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [evidenceAnalyses, setEvidenceAnalyses] = useState({});
+  const [analyzingEvidenceId, setAnalyzingEvidenceId] = useState(null);
+  const [evidenceAnalysisErrors, setEvidenceAnalysisErrors] = useState({});
 
   const load = useCallback(() => {
     const token = getAccessToken();
+    let inspectionId = null;
     getAssignment(assignmentId, token)
       .then((data) => {
         setAssignment(data);
-        return data.inspection
-          ? listInspectionEvidence(data.inspection.id, token)
-          : Promise.resolve([]);
+        inspectionId = data.inspection ? data.inspection.id : null;
+        return inspectionId ? listInspectionEvidence(inspectionId, token) : Promise.resolve([]);
       })
-      .then(setEvidence)
+      .then((evidenceData) => {
+        setEvidence(evidenceData);
+        if (!inspectionId || evidenceData.length === 0) {
+          return [];
+        }
+        return Promise.all(
+          evidenceData.map((item) =>
+            getInspectionEvidenceAnalysis(inspectionId, item.id, token)
+              .then((result) => [item.id, result])
+              .catch(() => [item.id, null])
+          )
+        );
+      })
+      .then((entries) => setEvidenceAnalyses(Object.fromEntries(entries)))
       .catch((err) => setError(err.message));
   }, [assignmentId, getAccessToken]);
 
@@ -88,6 +106,36 @@ function InspectionDetails() {
     await uploadInspectionEvidence(assignment.inspection.id, file, getAccessToken());
     const updated = await listInspectionEvidence(assignment.inspection.id, getAccessToken());
     setEvidence(updated);
+  }
+
+  async function handleAnalyzeEvidence(evidenceId, { force = false } = {}) {
+    setEvidenceAnalysisErrors((prev) => ({ ...prev, [evidenceId]: null }));
+    setAnalyzingEvidenceId(evidenceId);
+    try {
+      const result = await runInspectionEvidenceAnalysis(
+        assignment.inspection.id,
+        evidenceId,
+        getAccessToken(),
+        { force }
+      );
+      setEvidenceAnalyses((prev) => ({ ...prev, [evidenceId]: result }));
+    } catch (err) {
+      setEvidenceAnalysisErrors((prev) => ({ ...prev, [evidenceId]: err.message }));
+    } finally {
+      setAnalyzingEvidenceId(null);
+    }
+  }
+
+  function renderEvidenceAnalysis(item) {
+    return (
+      <EvidenceAnalysisPanel
+        evidenceItem={item}
+        analysis={evidenceAnalyses[item.id]}
+        isRunning={analyzingEvidenceId === item.id}
+        error={evidenceAnalysisErrors[item.id]}
+        onRun={() => handleAnalyzeEvidence(item.id, { force: !!evidenceAnalyses[item.id] })}
+      />
+    );
   }
 
   async function handleComplete({ summary, actionRecommended }) {
@@ -168,7 +216,11 @@ function InspectionDetails() {
               <FindingForm onSubmit={handleAddFinding} isSubmitting={isSubmitting} />
 
               <h3>Evidence</h3>
-              <EvidenceUploader evidence={evidence} onUpload={handleUploadEvidence} />
+              <EvidenceUploader
+                evidence={evidence}
+                onUpload={handleUploadEvidence}
+                renderExtra={renderEvidenceAnalysis}
+              />
             </>
           )}
 
@@ -184,7 +236,7 @@ function InspectionDetails() {
               <h3>Findings</h3>
               <FindingList findings={inspection.findings} />
               <h3>Evidence</h3>
-              <EvidenceUploader evidence={evidence} readOnly />
+              <EvidenceUploader evidence={evidence} readOnly renderExtra={renderEvidenceAnalysis} />
               <p>
                 <strong>Summary:</strong> {inspection.summary}
               </p>

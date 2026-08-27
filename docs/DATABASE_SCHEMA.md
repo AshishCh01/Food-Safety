@@ -236,11 +236,11 @@ Suggested columns:
 - `captured_at`
 - `latitude`
 - `longitude`
-- `ocr_text` nullable
-- `ai_analysis` JSONB nullable
 - `created_at`
 
-Use Storage for the actual file.
+Use Storage for the actual file. AI-generated OCR text and evidence analysis
+are **not** stored as columns on this table - see section 20.1
+(`evidence_analysis_results`) for why and where they live instead.
 
 ## 14. `assignments`
 
@@ -339,7 +339,71 @@ Suggested `notifications` table:
 - `is_read`
 - `created_at`
 
-## 20. RAG Tables
+## 20. AI Advisory Result Tables
+
+Advisory AI output (Phase 6 Complaint Triage, Phase 7 Evidence Analysis) is
+never written into the source-of-truth tables (`complaints`, `evidence`).
+Each agent instead appends rows to its own results table, so that:
+
+- the original citizen/inspector-submitted record is never overwritten,
+- re-running an agent accumulates history instead of destroying the prior
+  result, and
+- callers can distinguish "no analysis has been run yet" from "analysis ran
+  and failed" from "analysis completed".
+
+Both tables share the same shape: a foreign key to the source record, who
+requested the run, a `model_used` string, a `completed`/`failed` status, the
+structured fields specific to that agent, `confidence`/uncertainty
+indicators, `error_code`/`error_message` (populated only when `status =
+failed`), and `created_at`. Callers read the latest row by `created_at`
+rather than assuming one row per source record.
+
+### `complaint_triage_results`
+
+- `id`
+- `complaint_id` FK -> complaints (CASCADE)
+- `requested_by_user_id` FK -> users (RESTRICT)
+- `status` (`completed` / `failed`)
+- `model_used`
+- `suggested_category_id` FK -> complaint_categories (SET NULL, only ever a
+  real active category)
+- `suggested_category_raw` - the raw label the model produced, kept even when
+  it didn't map onto a known category
+- `category_match_uncertain`
+- `suggested_priority` (reuses the `complaint_priority` enum)
+- `summary`
+- `entities` JSON (e.g. business name/product extracted from the complaint
+  text)
+- `missing_information` JSON (list of strings)
+- `confidence`, `is_uncertain`
+- `error_code`, `error_message`
+- `created_at`
+
+### `evidence_analysis_results`
+
+- `id`
+- `evidence_id` FK -> evidence (CASCADE)
+- `requested_by_user_id` FK -> users (RESTRICT)
+- `status` (`completed` / `failed`)
+- `model_used`
+- `extracted_text` (OCR)
+- `product_name`, `manufacturer`, `batch_lot_number`
+- `manufacturing_date_text`, `expiry_date_text` - raw as extracted from the
+  label, never parsed into a `Date` column since packaging dates are
+  frequently partial/ambiguous
+- `possible_expired` - a deterministic, code-side interpretation of
+  `expiry_date_text` against the current date, kept separate from the raw
+  extracted value; `NULL` when the date couldn't be parsed. This is an
+  advisory flag for officer/inspector review only, never a legal conclusion
+  that a product is expired or non-compliant.
+- `packaging_observations`, `hygiene_observations`,
+  `foreign_object_observations`
+- `uncertainty_notes` JSON (list of strings)
+- `confidence`, `is_uncertain`
+- `error_code`, `error_message`
+- `created_at`
+
+## 21. RAG Tables
 
 ### `rag_documents`
 
@@ -367,7 +431,7 @@ Suggested `notifications` table:
 - `embedding` vector(...) when pgvector is enabled
 - `created_at`
 
-## 21. Indexing
+## 22. Indexing
 
 Recommended indexes include:
 
@@ -383,10 +447,12 @@ Recommended indexes include:
 - assignments.assigned_to_staff_id + status
 - inspections.inspector_id + inspection_status
 - complaint_status_history.complaint_id + created_at
+- complaint_triage_results.complaint_id + created_at
+- evidence_analysis_results.evidence_id + created_at
 - geographic columns for location queries
 - vector index for RAG embeddings after retrieval requirements are validated
 
-## 22. Migrations
+## 23. Migrations
 
 All schema changes must be made through Alembic.
 

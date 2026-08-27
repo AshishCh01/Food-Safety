@@ -53,3 +53,13 @@ class FindingSeverity(str, enum.Enum):
     MEDIUM = "medium"
     HIGH = "high"
     CRITICAL = "critical"
+
+
+class TriageStatus(str, enum.Enum):
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class EvidenceAnalysisStatus(str, enum.Enum):
+    COMPLETED = "completed"
+    FAILED = "failed"

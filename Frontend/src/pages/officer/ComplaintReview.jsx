@@ -6,7 +6,15 @@ import ComplaintTimeline from '../../components/complaint/ComplaintTimeline';
 import EvidenceUploader from '../../components/complaint/EvidenceUploader';
 import FindingList from '../../components/inspection/FindingList';
 import LocationMap from '../../components/map/LocationMap';
+import ComplaintTriagePanel from '../../components/agent/ComplaintTriagePanel';
+import EvidenceAnalysisPanel from '../../components/agent/EvidenceAnalysisPanel';
 import { useAuth } from '../../hooks/useAuth';
+import {
+  getComplaintEvidenceAnalysis,
+  getComplaintTriage,
+  runComplaintEvidenceAnalysis,
+  runComplaintTriage,
+} from '../../services/agentService';
 import {
   getComplaintAssignment,
   getComplaintInspection,
@@ -38,10 +46,16 @@ function ComplaintReview() {
   const [evidence, setEvidence] = useState([]);
   const [assignment, setAssignment] = useState(null);
   const [inspection, setInspection] = useState(null);
+  const [triage, setTriage] = useState(null);
   const [nextStatus, setNextStatus] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [triageError, setTriageError] = useState(null);
+  const [isTriageRunning, setIsTriageRunning] = useState(false);
+  const [evidenceAnalyses, setEvidenceAnalyses] = useState({});
+  const [analyzingEvidenceId, setAnalyzingEvidenceId] = useState(null);
+  const [evidenceAnalysisErrors, setEvidenceAnalysisErrors] = useState({});
 
   const load = useCallback(() => {
     const token = getAccessToken();
@@ -51,14 +65,29 @@ function ComplaintReview() {
       listDistrictComplaintEvidence(complaintId, token),
       getComplaintAssignment(complaintId, token).catch(() => null),
       getComplaintInspection(complaintId, token).catch(() => null),
+      getComplaintTriage(complaintId, token).catch(() => null),
     ])
-      .then(([complaintData, timelineData, evidenceData, assignmentData, inspectionData]) => {
+      .then(([complaintData, timelineData, evidenceData, assignmentData, inspectionData, triageData]) => {
         setComplaint(complaintData);
         setTimeline(timelineData);
         setEvidence(evidenceData);
         setAssignment(assignmentData);
         setInspection(inspectionData);
+        setTriage(triageData);
         setNextStatus('');
+
+        return Promise.all(
+          evidenceData.map((item) =>
+            getComplaintEvidenceAnalysis(complaintId, item.id, token)
+              .then((result) => [item.id, result])
+              .catch(() => [item.id, null])
+          )
+        );
+      })
+      .then((entries) => {
+        if (entries) {
+          setEvidenceAnalyses(Object.fromEntries(entries));
+        }
       })
       .catch((err) => setError(err.message));
   }, [complaintId, getAccessToken]);
@@ -66,6 +95,32 @@ function ComplaintReview() {
   useEffect(() => {
     load();
   }, [load]);
+
+  async function handleRunTriage() {
+    setTriageError(null);
+    setIsTriageRunning(true);
+    try {
+      const result = await runComplaintTriage(complaintId, getAccessToken());
+      setTriage(result);
+    } catch (err) {
+      setTriageError(err.message);
+    } finally {
+      setIsTriageRunning(false);
+    }
+  }
+
+  async function handleAnalyzeEvidence(evidenceId, { force = false } = {}) {
+    setEvidenceAnalysisErrors((prev) => ({ ...prev, [evidenceId]: null }));
+    setAnalyzingEvidenceId(evidenceId);
+    try {
+      const result = await runComplaintEvidenceAnalysis(complaintId, evidenceId, getAccessToken(), { force });
+      setEvidenceAnalyses((prev) => ({ ...prev, [evidenceId]: result }));
+    } catch (err) {
+      setEvidenceAnalysisErrors((prev) => ({ ...prev, [evidenceId]: err.message }));
+    } finally {
+      setAnalyzingEvidenceId(null);
+    }
+  }
 
   async function handleStatusUpdate(event) {
     event.preventDefault();
@@ -140,8 +195,27 @@ function ComplaintReview() {
         </>
       )}
 
+      <ComplaintTriagePanel
+        triage={triage}
+        isRunning={isTriageRunning}
+        error={triageError}
+        onRun={handleRunTriage}
+      />
+
       <h2>Evidence</h2>
-      <EvidenceUploader evidence={evidence} readOnly />
+      <EvidenceUploader
+        evidence={evidence}
+        readOnly
+        renderExtra={(item) => (
+          <EvidenceAnalysisPanel
+            evidenceItem={item}
+            analysis={evidenceAnalyses[item.id]}
+            isRunning={analyzingEvidenceId === item.id}
+            error={evidenceAnalysisErrors[item.id]}
+            onRun={() => handleAnalyzeEvidence(item.id, { force: !!evidenceAnalyses[item.id] })}
+          />
+        )}
+      />
 
       <h2>Inspection assignment</h2>
       {complaint.status === 'verified' && !assignment && (

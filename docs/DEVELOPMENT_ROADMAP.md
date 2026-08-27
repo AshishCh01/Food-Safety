@@ -1,5 +1,17 @@
 # Development Roadmap
 
+> **Phase numbering note:** this document's phase numbers (below, from Phase
+> 6 onward) diverge from `docs/PROJECT_SPEC.md` section 30, which is what was
+> actually built: PROJECT_SPEC orders Complaint Triage as Phase 6 and
+> Evidence Analysis as Phase 7, both ahead of RAG (Phase 8) and Investigation
+> (Phase 9); this document instead orders RAG (6) and Inspector Assistant (7)
+> ahead of Triage (8) and Evidence (9). `docs/ARCHITECTURE_TREE.md`'s own
+> source-of-truth priority list ranks `PROJECT_SPEC.md` above this document,
+> and the codebase has followed PROJECT_SPEC's ordering (Complaint Triage and
+> Evidence Analysis are already built, ahead of RAG). Treat PROJECT_SPEC.md's
+> phase order as authoritative for phases 6+; the section headings below are
+> left as originally written rather than renumbered.
+
 ## 1. Goal
 
 Build the Maharashtra Food Safety Complaint and Inspection Platform incrementally using Claude Code in VS Code, with every phase producing a working and testable increment.

@@ -4,10 +4,13 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.agents.complaint_triage import agent as complaint_triage_agent
+from app.agents.evidence_analysis import agent as evidence_analysis_agent
 from app.core.database import get_db
 from app.core.dependencies import get_current_staff_profile, require_district_officer
 from app.models.staff_profile import StaffProfile
 from app.repositories import complaint_status_history_repository, staff_repository
+from app.schemas.agent import ComplaintTriageRead, EvidenceAnalysisRead
 from app.schemas.assignment import AssignmentCreateRequest, AssignmentRead
 from app.schemas.complaint import (
     ComplaintMapData,
@@ -28,6 +31,7 @@ from app.services import (
     staff_service,
 )
 from app.utils.enums import ComplaintPriority, ComplaintStatus, UserRole
+from app.utils.exceptions import EvidenceAnalysisNotFoundError, TriageNotFoundError
 
 router = APIRouter(prefix="/officer", tags=["officer"], dependencies=[Depends(require_district_officer)])
 
@@ -220,3 +224,70 @@ def get_complaint_inspection(
     complaint = complaint_service.get_complaint_for_officer(db, staff, complaint_id)
     inspection = inspection_service.get_inspection_for_officer(db, staff, complaint)
     return inspection_service.to_inspection_read(inspection)
+
+
+@router.post(
+    "/complaints/{complaint_id}/triage", response_model=ComplaintTriageRead, status_code=status.HTTP_201_CREATED
+)
+def run_complaint_triage(
+    complaint_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> ComplaintTriageRead:
+    """Explicitly triggers the AI Complaint Triage Agent for a complaint in
+    the officer's own district. Advisory only - see
+    docs/AI_AGENTS_ARCHITECTURE.md section 4. This never runs automatically
+    on view; an officer must request it."""
+    complaint = complaint_service.get_complaint_for_officer(db, staff, complaint_id)
+    triage = complaint_triage_agent.run_triage(db, staff, complaint)
+    return complaint_triage_agent.to_triage_read(triage)
+
+
+@router.get("/complaints/{complaint_id}/triage", response_model=ComplaintTriageRead)
+def get_complaint_triage(
+    complaint_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> ComplaintTriageRead:
+    """Reads the most recent AI triage result, if any, without calling
+    Gemini again."""
+    complaint = complaint_service.get_complaint_for_officer(db, staff, complaint_id)
+    triage = complaint_triage_agent.get_latest_triage(db, complaint.id)
+    if triage is None:
+        raise TriageNotFoundError()
+    return complaint_triage_agent.to_triage_read(triage)
+
+
+@router.post("/complaints/{complaint_id}/evidence/{evidence_id}/analysis", response_model=EvidenceAnalysisRead)
+def run_complaint_evidence_analysis(
+    complaint_id: uuid.UUID,
+    evidence_id: uuid.UUID,
+    force: bool = Query(default=False),
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> EvidenceAnalysisRead:
+    """Explicitly triggers the AI Evidence Analysis Agent for an evidence item
+    on a complaint in the officer's own district. Advisory only - see
+    docs/AI_AGENTS_ARCHITECTURE.md section 5. Returns a cached result if one
+    already exists unless `force=true` is passed."""
+    complaint = complaint_service.get_complaint_for_officer(db, staff, complaint_id)
+    evidence = evidence_service.get_evidence_for_officer(db, complaint, evidence_id)
+    analysis = evidence_analysis_agent.run_analysis(db, staff, evidence, force=force)
+    return evidence_analysis_agent.to_analysis_read(analysis)
+
+
+@router.get("/complaints/{complaint_id}/evidence/{evidence_id}/analysis", response_model=EvidenceAnalysisRead)
+def get_complaint_evidence_analysis(
+    complaint_id: uuid.UUID,
+    evidence_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> EvidenceAnalysisRead:
+    """Reads the most recent AI evidence analysis result, if any, without
+    calling Gemini again."""
+    complaint = complaint_service.get_complaint_for_officer(db, staff, complaint_id)
+    evidence = evidence_service.get_evidence_for_officer(db, complaint, evidence_id)
+    analysis = evidence_analysis_agent.get_latest_analysis(db, evidence.id)
+    if analysis is None:
+        raise EvidenceAnalysisNotFoundError()
+    return evidence_analysis_agent.to_analysis_read(analysis)
