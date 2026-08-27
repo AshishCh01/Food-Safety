@@ -14,6 +14,24 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173"
 
+    jwt_secret_key: str = "insecure-development-secret-change-me"
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 7
+
+    supabase_url: str = ""
+    supabase_service_role_key: str = ""
+    supabase_storage_bucket: str = "complaint-evidence"
+
+    gemini_api_key: str = ""
+    gemini_main_model: str = "gemini-3.7-flash"
+    gemini_reasoning_model: str = "gemini-3.1-pro"
+    gemini_embedding_model: str = "gemini-embedding-2-preview"
+
+    enable_reverse_geocoding: bool = True
+    nominatim_base_url: str = "https://nominatim.openstreetmap.org"
+    nominatim_user_agent: str = "food-safety-platform/1.0 (contact: ops@foodsafety.local)"
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

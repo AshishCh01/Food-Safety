@@ -12,3 +12,13 @@ def test_cors_origin_list_parses_comma_separated_values() -> None:
     settings = Settings(_env_file=None, cors_origins="http://a.com, http://b.com")
 
     assert settings.cors_origin_list == ["http://a.com", "http://b.com"]
+
+
+def test_gemini_and_supabase_settings_have_sane_defaults() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.gemini_main_model == "gemini-3.7-flash"
+    assert settings.gemini_reasoning_model == "gemini-3.1-pro"
+    assert settings.gemini_embedding_model == "gemini-embedding-2-preview"
+    assert settings.gemini_api_key == ""
+    assert settings.supabase_storage_bucket == "complaint-evidence"
