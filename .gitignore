@@ -1,4 +1,21 @@
-/docs
-docs/
-docs/*
-docs
+# Environment files
+.env
+*.env.local
+
+# Python / backend
+Backend/venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+
+# Node / frontend
+Frontend/node_modules/
+Frontend/dist/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+docs/CLAUDE.md

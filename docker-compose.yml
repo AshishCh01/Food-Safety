@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: ./Backend
+    env_file:
+      - ./Backend/.env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./Backend/app:/app/app
+      - ./Backend/alembic:/app/alembic
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./Frontend
+    env_file:
+      - ./Frontend/.env
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./Frontend/src:/app/src
+      - ./Frontend/public:/app/public
+    depends_on:
+      - backend
