@@ -10,6 +10,7 @@ import InspectorDashboard from '../pages/inspector/InspectorDashboard';
 import AssignedComplaints from '../pages/inspector/AssignedComplaints';
 import InspectionDetails from '../pages/inspector/InspectionDetails';
 import InspectionHistory from '../pages/inspector/InspectionHistory';
+import InspectorAssistant from '../pages/inspector/InspectorAssistant';
 import OfficerDashboard from '../pages/officer/OfficerDashboard';
 import ComplaintQueue from '../pages/officer/ComplaintQueue';
 import ComplaintReview from '../pages/officer/ComplaintReview';
@@ -39,6 +40,7 @@ function AppRoutes() {
           <Route path="/inspector/assignments" element={<AssignedComplaints />} />
           <Route path="/inspector/assignments/:assignmentId" element={<InspectionDetails />} />
           <Route path="/inspector/history" element={<InspectionHistory />} />
+          <Route path="/inspector/assistant" element={<InspectorAssistant />} />
         </Route>
         <Route element={<RoleRoute allowedRoles={[ROLES.DISTRICT_OFFICER]} />}>
           <Route path="/officer" element={<OfficerDashboard />} />

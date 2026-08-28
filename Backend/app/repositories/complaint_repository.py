@@ -162,6 +162,24 @@ def list_within_radius(
     return within_radius[:limit]
 
 
+def list_by_business(
+    db: Session,
+    business_id: uuid.UUID,
+    district_id: uuid.UUID,
+    *,
+    exclude_complaint_id: uuid.UUID | None = None,
+    limit: int = 5,
+) -> list[Complaint]:
+    """Other complaints against the same business, scoped to `district_id` (the
+    caller's own district) so this can never surface another district's data -
+    used by the Inspector Assistant's get_previous_complaints tool."""
+    stmt = select(Complaint).where(Complaint.business_id == business_id, Complaint.district_id == district_id)
+    if exclude_complaint_id is not None:
+        stmt = stmt.where(Complaint.id != exclude_complaint_id)
+    stmt = stmt.options(*_EAGER_OPTIONS).order_by(Complaint.created_at.desc()).limit(limit)
+    return list(db.execute(stmt).scalars().all())
+
+
 def list_by_district(
     db: Session,
     district_id: uuid.UUID,

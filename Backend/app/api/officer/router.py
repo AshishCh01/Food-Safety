@@ -6,11 +6,12 @@ from sqlalchemy.orm import Session
 
 from app.agents.complaint_triage import agent as complaint_triage_agent
 from app.agents.evidence_analysis import agent as evidence_analysis_agent
+from app.agents.investigation import agent as investigation_agent
 from app.core.database import get_db
 from app.core.dependencies import get_current_staff_profile, require_district_officer
 from app.models.staff_profile import StaffProfile
 from app.repositories import complaint_status_history_repository, staff_repository
-from app.schemas.agent import ComplaintTriageRead, EvidenceAnalysisRead
+from app.schemas.agent import ComplaintTriageRead, EvidenceAnalysisRead, InvestigationBriefRead
 from app.schemas.assignment import AssignmentCreateRequest, AssignmentRead
 from app.schemas.complaint import (
     ComplaintMapData,
@@ -31,7 +32,7 @@ from app.services import (
     staff_service,
 )
 from app.utils.enums import ComplaintPriority, ComplaintStatus, UserRole
-from app.utils.exceptions import EvidenceAnalysisNotFoundError, TriageNotFoundError
+from app.utils.exceptions import EvidenceAnalysisNotFoundError, InvestigationNotFoundError, TriageNotFoundError
 
 router = APIRouter(prefix="/officer", tags=["officer"], dependencies=[Depends(require_district_officer)])
 
@@ -291,3 +292,35 @@ def get_complaint_evidence_analysis(
     if analysis is None:
         raise EvidenceAnalysisNotFoundError()
     return evidence_analysis_agent.to_analysis_read(analysis)
+
+
+@router.post("/complaints/{complaint_id}/investigation", response_model=InvestigationBriefRead)
+def run_complaint_investigation(
+    complaint_id: uuid.UUID,
+    force: bool = Query(default=False),
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> InvestigationBriefRead:
+    """Explicitly triggers the AI Investigation Agent for a complaint in the
+    officer's own district. Advisory case intelligence only - see
+    docs/AI_AGENTS_ARCHITECTURE.md section 6. Never runs automatically on
+    view. Returns a cached result if one already exists unless `force=true`
+    is passed."""
+    complaint = complaint_service.get_complaint_for_officer(db, staff, complaint_id)
+    brief = investigation_agent.run_investigation(db, staff, complaint, force=force)
+    return investigation_agent.to_investigation_read(brief)
+
+
+@router.get("/complaints/{complaint_id}/investigation", response_model=InvestigationBriefRead)
+def get_complaint_investigation(
+    complaint_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> InvestigationBriefRead:
+    """Reads the most recent AI investigation brief, if any, without calling
+    Gemini again."""
+    complaint = complaint_service.get_complaint_for_officer(db, staff, complaint_id)
+    brief = investigation_agent.get_latest_investigation(db, complaint.id)
+    if brief is None:
+        raise InvestigationNotFoundError()
+    return investigation_agent.to_investigation_read(brief)

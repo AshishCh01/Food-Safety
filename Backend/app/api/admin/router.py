@@ -1,16 +1,18 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import require_admin
-from app.repositories import district_repository, division_repository, user_repository
+from app.models.user import User
+from app.repositories import district_repository, division_repository, rag_document_repository, user_repository
 from app.schemas.district import DistrictRead
+from app.schemas.rag import PaginatedRagDocuments, RagDocumentCreate, RagDocumentRead
 from app.schemas.staff import StaffCreateRequest, StaffRead
 from app.schemas.user import PaginatedUsers, UserStatusUpdate, UserSummary
-from app.services import district_service, staff_service
-from app.utils.enums import UserRole
+from app.services import district_service, rag_document_service, staff_service
+from app.utils.enums import RagDocumentStatus, RagDocumentType, UserRole
 from app.utils.exceptions import NotFoundError
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
@@ -76,3 +78,88 @@ def update_user_status(
         raise NotFoundError("User was not found.")
     user = user_repository.set_active_status(db, user, payload.is_active)
     return UserSummary.model_validate(user)
+
+
+@router.post("/rag/documents", response_model=RagDocumentRead, status_code=status.HTTP_201_CREATED)
+async def upload_rag_document(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    document_type: RagDocumentType = Form(...),
+    source_organization: str | None = Form(default=None),
+    version: str | None = Form(default=None),
+    effective_date: str | None = Form(default=None),
+    source_url: str | None = Form(default=None),
+    business_type: str | None = Form(default=None),
+    jurisdiction: str = Form(default="India"),
+    current_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> RagDocumentRead:
+    """Uploads an official knowledge-base source document (see
+    docs/RAG_ARCHITECTURE.md). Only stores and records the file - a separate
+    POST to /rag/documents/{id}/ingest triggers parsing/chunking/embedding."""
+    payload = RagDocumentCreate(
+        title=title,
+        source_organization=source_organization,
+        document_type=document_type,
+        version=version,
+        effective_date=effective_date or None,
+        source_url=source_url,
+        business_type=business_type,
+        jurisdiction=jurisdiction,
+    )
+    file_bytes = await file.read()
+    document = rag_document_service.upload_document(
+        db,
+        current_user,
+        payload,
+        file_bytes=file_bytes,
+        filename=file.filename or "document",
+        content_type=file.content_type or "application/octet-stream",
+    )
+    return rag_document_service.to_document_read(document)
+
+
+@router.get("/rag/documents", response_model=PaginatedRagDocuments)
+def list_rag_documents(
+    status_filter: RagDocumentStatus | None = Query(default=None, alias="status"),
+    document_type: RagDocumentType | None = Query(default=None),
+    is_active: bool | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> PaginatedRagDocuments:
+    items, total = rag_document_repository.list_documents(
+        db, status=status_filter, document_type=document_type, is_active=is_active, page=page, page_size=page_size
+    )
+    return PaginatedRagDocuments(
+        items=[rag_document_service.to_document_read(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/rag/documents/{document_id}", response_model=RagDocumentRead)
+def get_rag_document(document_id: uuid.UUID, db: Session = Depends(get_db)) -> RagDocumentRead:
+    document = rag_document_service.get_document(db, document_id)
+    return rag_document_service.to_document_read(document)
+
+
+@router.post("/rag/documents/{document_id}/ingest", response_model=RagDocumentRead)
+def ingest_rag_document(document_id: uuid.UUID, db: Session = Depends(get_db)) -> RagDocumentRead:
+    """Explicitly triggers document parsing/chunking/embedding (synchronous -
+    matches the existing pattern of Complaint Triage / Evidence Analysis
+    running on an explicit POST). Safe to re-run; replaces any existing
+    chunks for this document."""
+    document = rag_document_service.get_document(db, document_id)
+    document = rag_document_service.run_ingestion(db, document)
+    return rag_document_service.to_document_read(document)
+
+
+@router.post("/rag/documents/{document_id}/deactivate", response_model=RagDocumentRead)
+def deactivate_rag_document(document_id: uuid.UUID, db: Session = Depends(get_db)) -> RagDocumentRead:
+    """Deactivates a knowledge-base source (docs/RAG_ARCHITECTURE.md section
+    12) without deleting it - retrieval only ever considers active documents."""
+    document = rag_document_service.get_document(db, document_id)
+    document = rag_document_service.deactivate_document(db, document)
+    return rag_document_service.to_document_read(document)

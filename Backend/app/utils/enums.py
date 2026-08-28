@@ -63,3 +63,53 @@ class TriageStatus(str, enum.Enum):
 class EvidenceAnalysisStatus(str, enum.Enum):
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class InvestigationStatus(str, enum.Enum):
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class RagDocumentType(str, enum.Enum):
+    LAW = "law"
+    REGULATION = "regulation"
+    INSPECTION_GUIDELINE = "inspection_guideline"
+    HYGIENE_GUIDELINE = "hygiene_guideline"
+    SAMPLING_PROCEDURE = "sampling_procedure"
+    RECALL_PROCEDURE = "recall_procedure"
+    LICENSING = "licensing"
+    DEPARTMENT_SOP = "department_sop"
+    OTHER = "other"
+
+
+# Document types considered when an inspector's question is regulatory/legal in
+# nature (search_regulations).
+REGULATION_DOCUMENT_TYPES = (
+    RagDocumentType.LAW,
+    RagDocumentType.REGULATION,
+    RagDocumentType.LICENSING,
+    RagDocumentType.RECALL_PROCEDURE,
+    RagDocumentType.OTHER,
+)
+
+# Document types considered when an inspector's question is about how to conduct
+# an inspection (search_inspection_guidelines).
+INSPECTION_GUIDELINE_DOCUMENT_TYPES = (
+    RagDocumentType.INSPECTION_GUIDELINE,
+    RagDocumentType.HYGIENE_GUIDELINE,
+    RagDocumentType.SAMPLING_PROCEDURE,
+    RagDocumentType.DEPARTMENT_SOP,
+)
+
+
+class RagDocumentStatus(str, enum.Enum):
+    PENDING = "pending"
+    INGESTED = "ingested"
+    FAILED = "failed"
+    SUPERSEDED = "superseded"
+    DEACTIVATED = "deactivated"
+
+
+class AssistantMessageRole(str, enum.Enum):
+    USER = "user"
+    ASSISTANT = "assistant"

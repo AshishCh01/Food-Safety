@@ -82,13 +82,19 @@ def generate_structured_json_with_media(
 
 
 def embed_text(text: str) -> list[float]:
-    """Returns an embedding vector for the given text using the configured embedding model."""
+    """Returns an embedding vector for the given text using the configured embedding
+    model, truncated/normalized to `settings.gemini_embedding_dimensions` so every
+    vector stored in `rag_document_chunks.embedding` has a consistent size (required
+    by the pgvector column - see app/core/vector_types.py)."""
     settings = get_settings()
     client = get_gemini_client()
+    config = types.EmbedContentConfig(output_dimensionality=settings.gemini_embedding_dimensions)
     try:
-        response = client.models.embed_content(model=settings.gemini_embedding_model, contents=text)
+        response = client.models.embed_content(model=settings.gemini_embedding_model, contents=text, config=config)
     except genai_errors.APIError as exc:
         raise _normalize_api_error(exc) from exc
+    except Exception as exc:  # transport-level failures (timeouts, connection errors, ...)
+        raise GeminiUnavailableError("The AI service did not respond in time.") from exc
     return list(response.embeddings[0].values)
 
 

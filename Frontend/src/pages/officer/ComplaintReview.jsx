@@ -8,11 +8,14 @@ import FindingList from '../../components/inspection/FindingList';
 import LocationMap from '../../components/map/LocationMap';
 import ComplaintTriagePanel from '../../components/agent/ComplaintTriagePanel';
 import EvidenceAnalysisPanel from '../../components/agent/EvidenceAnalysisPanel';
+import InvestigationBriefPanel from '../../components/agent/InvestigationBriefPanel';
 import { useAuth } from '../../hooks/useAuth';
 import {
   getComplaintEvidenceAnalysis,
+  getComplaintInvestigation,
   getComplaintTriage,
   runComplaintEvidenceAnalysis,
+  runComplaintInvestigation,
   runComplaintTriage,
 } from '../../services/agentService';
 import {
@@ -56,6 +59,9 @@ function ComplaintReview() {
   const [evidenceAnalyses, setEvidenceAnalyses] = useState({});
   const [analyzingEvidenceId, setAnalyzingEvidenceId] = useState(null);
   const [evidenceAnalysisErrors, setEvidenceAnalysisErrors] = useState({});
+  const [investigation, setInvestigation] = useState(null);
+  const [investigationError, setInvestigationError] = useState(null);
+  const [isInvestigationRunning, setIsInvestigationRunning] = useState(false);
 
   const load = useCallback(() => {
     const token = getAccessToken();
@@ -66,14 +72,16 @@ function ComplaintReview() {
       getComplaintAssignment(complaintId, token).catch(() => null),
       getComplaintInspection(complaintId, token).catch(() => null),
       getComplaintTriage(complaintId, token).catch(() => null),
+      getComplaintInvestigation(complaintId, token).catch(() => null),
     ])
-      .then(([complaintData, timelineData, evidenceData, assignmentData, inspectionData, triageData]) => {
+      .then(([complaintData, timelineData, evidenceData, assignmentData, inspectionData, triageData, investigationData]) => {
         setComplaint(complaintData);
         setTimeline(timelineData);
         setEvidence(evidenceData);
         setAssignment(assignmentData);
         setInspection(inspectionData);
         setTriage(triageData);
+        setInvestigation(investigationData);
         setNextStatus('');
 
         return Promise.all(
@@ -106,6 +114,19 @@ function ComplaintReview() {
       setTriageError(err.message);
     } finally {
       setIsTriageRunning(false);
+    }
+  }
+
+  async function handleRunInvestigation() {
+    setInvestigationError(null);
+    setIsInvestigationRunning(true);
+    try {
+      const result = await runComplaintInvestigation(complaintId, getAccessToken(), { force: !!investigation });
+      setInvestigation(result);
+    } catch (err) {
+      setInvestigationError(err.message);
+    } finally {
+      setIsInvestigationRunning(false);
     }
   }
 
@@ -257,6 +278,13 @@ function ComplaintReview() {
           <FindingList findings={inspection.findings} />
         </>
       )}
+
+      <InvestigationBriefPanel
+        brief={investigation}
+        isRunning={isInvestigationRunning}
+        error={investigationError}
+        onRun={handleRunInvestigation}
+      />
 
       <h2>Update status</h2>
       {availableTransitions.length === 0 ? (

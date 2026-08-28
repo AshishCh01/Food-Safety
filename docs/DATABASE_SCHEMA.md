@@ -403,6 +403,45 @@ rather than assuming one row per source record.
 - `error_code`, `error_message`
 - `created_at`
 
+### `investigation_briefs`
+
+AI-generated Investigation Agent output for a District Officer (Phase 9, see
+`docs/AI_AGENTS_ARCHITECTURE.md` section 6), stored separately from
+`complaints`/`inspections` for the same reasons as the two tables above.
+`relevant_evidence` and `business_history` are populated directly from
+controlled tool results (never model-generated prose), so those facts can
+never be fabricated - only the analytical fields are model-generated, and
+every `regulatory_guidance` entry carries a citation resolved against an
+actually-retrieved RAG chunk (an entry whose citation can't be resolved is
+dropped rather than persisted uncited).
+
+- `id`
+- `complaint_id` FK -> complaints (CASCADE)
+- `requested_by_user_id` FK -> users (RESTRICT) - the requesting district
+  officer
+- `status` (`completed` / `failed`)
+- `model_used`
+- `case_summary` - model-generated, grounded only in the data fetched below
+- `relevant_evidence` JSON - list of completed evidence-analysis summaries,
+  copied verbatim from `evidence_analysis_results` via the agent's
+  `get_evidence_analysis` tool
+- `business_history` JSON - business info, previous-complaint count/list, and
+  previous-inspection count/list, all from controlled tools scoped to the
+  officer's own district
+- `complaint_patterns` JSON (list of strings) - model-identified patterns
+  across the complaint/inspection history above
+- `regulatory_guidance` JSON (list of `{guidance, citation}`) - model-drafted
+  guidance, each entry cited against a retrieved `rag_document_chunks` row
+- `risk_indicators` JSON (list of strings)
+- `missing_information` JSON (list of strings) - merges deterministic,
+  code-detected gaps (no triage run, no evidence analysis, no inspection
+  yet, ...) with model-identified ones
+- `suggested_actions` JSON (list of strings) - investigation/review actions
+  only, never a penalty, enforcement action, or case resolution
+- `confidence`, `is_uncertain`, `uncertainty_reasons` JSON (list of strings)
+- `error_code`, `error_message`
+- `created_at`
+
 ## 21. RAG Tables
 
 ### `rag_documents`
@@ -449,6 +488,7 @@ Recommended indexes include:
 - complaint_status_history.complaint_id + created_at
 - complaint_triage_results.complaint_id + created_at
 - evidence_analysis_results.evidence_id + created_at
+- investigation_briefs.complaint_id + created_at
 - geographic columns for location queries
 - vector index for RAG embeddings after retrieval requirements are validated
 

@@ -527,3 +527,158 @@
   color: var(--text);
   margin-top: 10px;
 }
+
+.assistant-chat {
+  text-align: left;
+  margin: 12px 0;
+}
+
+.assistant-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+.assistant-empty {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.assistant-message {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.assistant-message-user {
+  background: var(--code-bg);
+}
+
+.assistant-message-assistant {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.assistant-message-speaker {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+
+.assistant-message-content {
+  white-space: pre-wrap;
+  font-size: 14px;
+}
+
+.assistant-uncertain-banner {
+  color: #7f1d1d;
+  background: #fee2e2;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin: 8px 0 0;
+}
+
+.assistant-citations,
+.assistant-app-data {
+  margin-top: 8px;
+}
+
+.assistant-citations h4,
+.assistant-app-data h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.assistant-citations ul,
+.assistant-app-data ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+}
+
+.assistant-input-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.assistant-input-form textarea {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+  resize: vertical;
+}
+
+.ai-investigation-panel {
+  text-align: left;
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 16px 0;
+  background: var(--accent-bg);
+}
+
+.ai-investigation-panel h2 {
+  margin: 0;
+}
+
+.ai-investigation-empty {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.ai-investigation-uncertain-banner {
+  color: #7f1d1d;
+  background: #fee2e2;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  margin: 8px 0;
+}
+
+.ai-investigation-uncertain-banner p {
+  margin: 0;
+}
+
+.ai-investigation-uncertain-banner ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.ai-investigation-guidance-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ai-investigation-guidance-list li {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  background: var(--bg);
+}
+
+.ai-investigation-guidance-list p {
+  margin: 0;
+}
+
+.ai-investigation-citation {
+  font-size: 12px;
+  color: var(--text);
+  margin-top: 4px !important;
+}
+
+.ai-investigation-meta {
+  font-size: 12px;
+  color: var(--text);
+  margin-top: 12px;
+}

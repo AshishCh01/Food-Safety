@@ -27,7 +27,14 @@ class Settings(BaseSettings):
     gemini_main_model: str = "gemini-3.7-flash"
     gemini_reasoning_model: str = "gemini-3.1-pro"
     gemini_embedding_model: str = "gemini-embedding-2-preview"
+    gemini_embedding_dimensions: int = 768
     gemini_request_timeout_seconds: float = 20.0
+
+    rag_storage_bucket: str = "rag-documents"
+    rag_max_upload_size_mb: int = 20
+    rag_retrieval_top_k: int = 6
+    rag_chunk_target_chars: int = 1200
+    rag_chunk_overlap_chars: int = 150
 
     enable_reverse_geocoding: bool = True
     nominatim_base_url: str = "https://nominatim.openstreetmap.org"

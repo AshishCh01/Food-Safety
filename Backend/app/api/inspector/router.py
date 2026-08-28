@@ -8,7 +8,14 @@ from app.agents.evidence_analysis import agent as evidence_analysis_agent
 from app.core.database import get_db
 from app.core.dependencies import get_current_staff_profile, require_inspector
 from app.models.staff_profile import StaffProfile
-from app.schemas.agent import EvidenceAnalysisRead
+from app.schemas.agent import (
+    AssistantConversationCreateRequest,
+    AssistantConversationRead,
+    AssistantMessageCreateRequest,
+    AssistantMessageRead,
+    EvidenceAnalysisRead,
+    PaginatedAssistantConversations,
+)
 from app.schemas.assignment import AssignmentRead, AssignmentSummary, PaginatedAssignments
 from app.schemas.evidence import EvidenceRead
 from app.schemas.inspection import (
@@ -20,7 +27,7 @@ from app.schemas.inspection import (
     InspectionUpdateRequest,
     PaginatedInspections,
 )
-from app.services import assignment_service, evidence_service, inspection_service
+from app.services import assignment_service, assistant_service, evidence_service, inspection_service
 from app.utils.enums import AssignmentStatus, InspectionStatus
 from app.utils.exceptions import EvidenceAnalysisNotFoundError
 
@@ -230,3 +237,65 @@ def inspection_history(
         page=page,
         page_size=page_size,
     )
+
+
+@router.post(
+    "/assistant/conversations", response_model=AssistantConversationRead, status_code=status.HTTP_201_CREATED
+)
+def create_assistant_conversation(
+    payload: AssistantConversationCreateRequest,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> AssistantConversationRead:
+    """Starts an Inspector Assistant conversation (docs/AI_AGENTS_ARCHITECTURE.md
+    section 7). When `inspection_id` is given, ownership is verified
+    server-side (via inspection_service.get_inspection_for_inspector) before
+    the conversation is created - never trusted from the request alone."""
+    conversation = assistant_service.create_conversation(db, staff, payload.inspection_id)
+    return assistant_service.to_conversation_read(conversation)
+
+
+@router.get("/assistant/conversations", response_model=PaginatedAssistantConversations)
+def list_assistant_conversations(
+    inspection_id: uuid.UUID | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> PaginatedAssistantConversations:
+    items, total = assistant_service.list_conversations_for_inspector(
+        db, staff, inspection_id=inspection_id, page=page, page_size=page_size
+    )
+    return PaginatedAssistantConversations(
+        items=[assistant_service.to_conversation_summary(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/assistant/conversations/{conversation_id}", response_model=AssistantConversationRead)
+def get_assistant_conversation(
+    conversation_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> AssistantConversationRead:
+    conversation = assistant_service.get_conversation_for_inspector(db, staff, conversation_id)
+    return assistant_service.to_conversation_read(conversation)
+
+
+@router.post("/assistant/conversations/{conversation_id}/messages", response_model=AssistantMessageRead)
+def send_assistant_message(
+    conversation_id: uuid.UUID,
+    payload: AssistantMessageCreateRequest,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> AssistantMessageRead:
+    """Asks the Inspector Assistant a question within `conversation_id`.
+    Advisory only - see docs/AI_AGENTS_ARCHITECTURE.md section 7. A Gemini or
+    retrieval failure is returned as a normal 200 response containing a
+    failed assistant message (error_code/error_message set) rather than a
+    fabricated answer; a malformed AI response instead raises (502)."""
+    conversation = assistant_service.get_conversation_for_inspector(db, staff, conversation_id)
+    message = assistant_service.ask(db, staff, conversation, payload.question)
+    return assistant_service.to_message_read(message)

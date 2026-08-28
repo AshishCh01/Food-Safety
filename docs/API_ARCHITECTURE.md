@@ -107,6 +107,8 @@ POST /officer/complaints/{complaint_id}/triage
 GET  /officer/complaints/{complaint_id}/triage
 POST /officer/complaints/{complaint_id}/evidence/{evidence_id}/analysis
 GET  /officer/complaints/{complaint_id}/evidence/{evidence_id}/analysis
+POST /officer/complaints/{complaint_id}/investigation
+GET  /officer/complaints/{complaint_id}/investigation
 ```
 
 See section 11 for the agent endpoints. All officer endpoints automatically
@@ -166,17 +168,30 @@ GET  /officer/complaints/{complaint_id}/evidence/{evidence_id}/analysis
 
 POST /inspector/inspections/{inspection_id}/evidence/{evidence_id}/analysis
 GET  /inspector/inspections/{inspection_id}/evidence/{evidence_id}/analysis
+
+POST /officer/complaints/{complaint_id}/investigation
+GET  /officer/complaints/{complaint_id}/investigation
 ```
 
 `POST` explicitly triggers a new agent run (never automatic on view); `GET`
 reads the latest persisted result without calling the AI provider again. For
-evidence analysis, `POST` also accepts `?force=true` to explicitly re-run the
-agent even when a completed result already exists - without it, an existing
-completed result is returned as-is rather than calling the AI provider again.
+evidence analysis and the Investigation Agent, `POST` also accepts
+`?force=true` to explicitly re-run the agent even when a completed result
+already exists - without it, an existing completed result is returned as-is
+rather than calling the AI provider again.
 
-Future agents (Investigation Agent, Inspector Assistant, Report Generation)
-should follow the same nested-under-resource convention rather than a flat
-`/agent/*` path.
+The Investigation Agent (Phase 9) follows the same
+`complaint_service.get_complaint_for_officer`-scoped pattern as triage/
+evidence analysis - district isolation and role checks run before the agent
+is ever invoked, never inside it.
+
+The Inspector Assistant (Phase 8) instead exposes a small conversation
+resource nested under `/inspector/assistant/conversations` (see section 9)
+since it is multi-turn, but still resolves its scope
+(`inspection_service.get_inspection_for_inspector`) the same way before the
+agent runs. Future agents (e.g. Report Generation) should follow whichever
+of these two shapes fits - single-shot cacheable result vs. conversation -
+rather than a flat `/agent/*` path.
 
 These endpoints must validate role and scope before the agent is invoked.
 

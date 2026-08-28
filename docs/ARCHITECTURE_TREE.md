@@ -188,6 +188,8 @@ Food Safety/
 │   │       ├── 30824dc06f71_add_inspection_assignment_workflow.py
 │   │       ├── 18b2ad6af96d_add_complaint_triage_results.py
 │   │       ├── 09b78bb3d711_add_evidence_analysis_results.py
+│   │       ├── 7c3f1a9d2e4b_add_rag_and_assistant_tables.py
+│   │       ├── 4d8e6a1c9b2f_add_investigation_briefs.py
 │   │       └── ...
 │   │
 │   └── app/
@@ -219,6 +221,11 @@ Food Safety/
 │       │   ├── assignment.py
 │       │   ├── inspection.py
 │       │   ├── inspection_finding.py
+│       │   ├── investigation_brief.py # Phase 9 advisory result, see DATABASE_SCHEMA.md sec 20
+│       │   ├── rag_document.py
+│       │   ├── rag_document_chunk.py
+│       │   ├── assistant_conversation.py
+│       │   ├── assistant_message.py
 │       │   └── audit_log.py
 │       │
 │       ├── schemas/
@@ -233,7 +240,8 @@ Food Safety/
 │       │   ├── evidence.py
 │       │   ├── inspection.py
 │       │   ├── assignment.py
-│       │   ├── agent.py           # ComplaintTriageRead, EvidenceAnalysisRead
+│       │   ├── agent.py           # ComplaintTriageRead, EvidenceAnalysisRead, InvestigationBriefRead, Assistant*
+│       │   ├── rag.py
 │       │   └── common.py
 │       │
 │       ├── api/
@@ -243,9 +251,9 @@ Food Safety/
 │       │   ├── reference.py
 │       │   ├── auth/
 │       │   ├── citizen/
-│       │   ├── officer/           # includes /triage and /evidence/{id}/analysis endpoints
-│       │   ├── inspector/         # includes /evidence/{id}/analysis endpoints
-│       │   └── admin/
+│       │   ├── officer/           # includes /triage, /evidence/{id}/analysis, /investigation endpoints
+│       │   ├── inspector/         # includes /evidence/{id}/analysis and /assistant endpoints
+│       │   └── admin/             # includes /rag/documents endpoints
 │       │
 │       ├── services/
 │       │   ├── auth_service.py
@@ -259,7 +267,9 @@ Food Safety/
 │       │   ├── assignment_service.py
 │       │   ├── evidence_service.py
 │       │   ├── storage_service.py     # Supabase Storage: upload/download/signed URLs
-│       │   └── ai_service.py          # centralized Gemini text/structured/multimodal wrapper
+│       │   ├── ai_service.py          # centralized Gemini text/structured/multimodal wrapper
+│       │   ├── rag_document_service.py
+│       │   └── assistant_service.py
 │       │
 │       ├── repositories/
 │       │   ├── user_repository.py
@@ -277,13 +287,29 @@ Food Safety/
 │       │   ├── assignment_repository.py
 │       │   ├── inspection_repository.py
 │       │   ├── inspection_finding_repository.py
+│       │   ├── investigation_repository.py
+│       │   ├── rag_document_repository.py
+│       │   ├── rag_chunk_repository.py
+│       │   ├── assistant_repository.py
 │       │   └── audit_log_repository.py
 │       │
 │       ├── agents/
 │       │   ├── complaint_triage/
 │       │   │   └── agent.py       # Phase 6 - module functions, not a class
-│       │   └── evidence_analysis/
-│       │       └── agent.py       # Phase 7 - module functions, not a class
+│       │   ├── evidence_analysis/
+│       │   │   └── agent.py       # Phase 7 - module functions, not a class
+│       │   ├── inspector_assistant/
+│       │   │   ├── agent.py       # Phase 8 - module functions, not a class
+│       │   │   └── tools.py
+│       │   └── investigation/
+│       │       ├── agent.py       # Phase 9 - module functions, not a class
+│       │       └── tools.py
+│       │
+│       ├── rag/
+│       │   ├── parsing.py
+│       │   ├── chunking.py
+│       │   ├── ingestion.py
+│       │   └── retrieval.py
 │       │
 │       ├── utils/
 │       │   ├── enums.py
@@ -331,20 +357,43 @@ Food Safety/
 
 ## Build Status Note
 
-The tree above is updated through Phase 7 (Evidence Analysis Agent) for the
+The tree above is updated through Phase 9 (Investigation Agent) for the
 `backend/app/` subtree specifically, since that is what recent phases
 actually touch. A few items shown are still aspirational rather than built
 yet:
 
 - `data/`, `scripts/`, `nginx/`, and `.github/` do not exist in the
   repository yet.
-- `backend/app/agents/` currently contains only `complaint_triage/` (Phase 6)
-  and `evidence_analysis/` (Phase 7), each as plain module functions - there
-  is no `orchestrator.py`, `state.py`, `investigation/`,
-  `inspector_assistant/`, or `report_generation/` yet (see
-  `docs/DEVELOPMENT_ROADMAP.md` for when those are planned).
-- `backend/app/rag/` and `backend/app/tools/` do not exist yet (Phase 8+).
-- `notifications`/`document`/`document_chunk` models do not exist yet.
+- `backend/app/agents/` now contains `complaint_triage/` (Phase 6),
+  `evidence_analysis/` (Phase 7), `inspector_assistant/` (Phase 8), and
+  `investigation/` (Phase 9) - all plain module functions (`tools.py` +
+  `agent.py`) rather than classes, matching the existing agents' style.
+  There is still no `orchestrator.py`, `state.py`, or `report_generation/`
+  yet (see `docs/DEVELOPMENT_ROADMAP.md` for when those are planned).
+- `backend/app/rag/` now exists (`parsing.py`, `chunking.py`, `ingestion.py`,
+  `retrieval.py`). `backend/app/tools/` still does not exist - each
+  tool-using agent keeps its own `tools.py` (`app/agents/inspector_assistant/
+  tools.py`, `app/agents/investigation/tools.py`) rather than sharing one
+  top-level tools module, since the tool sets barely overlap and each is
+  already scoped by the agent that owns it.
+- RAG tables now exist as `rag_documents`/`rag_document_chunks`
+  (`app/models/rag_document.py`, `app/models/rag_document_chunk.py`), plus
+  `assistant_conversations`/`assistant_messages`
+  (`app/models/assistant_conversation.py`, `app/models/assistant_message.py`)
+  for Inspector Assistant conversation state, and `investigation_briefs`
+  (`app/models/investigation_brief.py`) for the Investigation Agent's
+  advisory result (Phase 9, single-shot and cacheable like
+  `evidence_analysis_results`, not a conversation). A `notifications` model
+  still does not exist yet (Phase 10+).
+- On the frontend, the actual AI-facing components are
+  `frontend/src/components/agent/ComplaintTriagePanel.jsx`,
+  `EvidenceAnalysisPanel.jsx`, `AssistantChat.jsx`, and
+  `InvestigationBriefPanel.jsx` (Phase 9) - not the generic
+  `AgentChat.jsx`/`AgentResponse.jsx`/`SourceCitation.jsx` names shown in the
+  aspirational frontend tree above. The Investigation Agent has no dedicated
+  page; it renders inline on `pages/officer/ComplaintReview.jsx` alongside
+  the triage/evidence panels, since it is scoped to one complaint being
+  reviewed rather than a standalone workflow.
 
 Update this note (or remove it once the tree is fully current again) the
 next time a phase changes backend structure.

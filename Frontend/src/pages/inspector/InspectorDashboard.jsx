@@ -33,6 +33,7 @@ function InspectorDashboard() {
       <div className="dashboard-actions">
         <Link to="/inspector/assignments">My assigned complaints</Link>
         <Link to="/inspector/history">Inspection history</Link>
+        <Link to="/inspector/assistant">Inspector Assistant</Link>
       </div>
     </section>
   );

@@ -231,3 +231,39 @@ class EvidenceAnalysisNotFoundError(NotFoundError):
 
     def __init__(self, message: str = "No AI evidence analysis exists for this evidence item yet.") -> None:
         super().__init__(message)
+
+
+class RagDocumentNotFoundError(NotFoundError):
+    code = "RAG_DOCUMENT_NOT_FOUND"
+
+    def __init__(self, message: str = "Knowledge base document was not found.") -> None:
+        super().__init__(message)
+
+
+class RagDocumentDuplicateError(ConflictError):
+    code = "RAG_DOCUMENT_DUPLICATE"
+
+    def __init__(self, message: str = "A document with identical content has already been uploaded.") -> None:
+        super().__init__(message)
+
+
+class RagIngestionError(AppError):
+    code = "RAG_INGESTION_FAILED"
+    status_code = 422
+
+    def __init__(self, message: str = "The document could not be parsed or ingested.") -> None:
+        super().__init__(message)
+
+
+class AssistantConversationNotFoundError(NotFoundError):
+    code = "ASSISTANT_CONVERSATION_NOT_FOUND"
+
+    def __init__(self, message: str = "Assistant conversation was not found.") -> None:
+        super().__init__(message)
+
+
+class InvestigationNotFoundError(NotFoundError):
+    code = "INVESTIGATION_NOT_FOUND"
+
+    def __init__(self, message: str = "No AI investigation brief exists for this complaint yet.") -> None:
+        super().__init__(message)
