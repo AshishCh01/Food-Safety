@@ -15,6 +15,7 @@ from app.models.evidence_analysis import EvidenceAnalysis
 from app.models.inspection import Inspection
 from app.models.inspection_finding import InspectionFinding
 from app.models.investigation_brief import InvestigationBrief
+from app.models.notification import Notification
 from app.models.rag_document import RagDocument
 from app.models.rag_document_chunk import RagDocumentChunk
 from app.models.staff_profile import StaffProfile
@@ -37,6 +38,7 @@ __all__ = [
     "Inspection",
     "InspectionFinding",
     "InvestigationBrief",
+    "Notification",
     "AuditLog",
     "RagDocument",
     "RagDocumentChunk",

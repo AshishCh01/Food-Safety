@@ -103,6 +103,7 @@ POST /officer/complaints/{complaint_id}/reject
 POST /officer/complaints/{complaint_id}/assign
 GET  /officer/inspectors
 GET  /officer/analytics
+GET  /officer/businesses/{business_id}/complaints
 POST /officer/complaints/{complaint_id}/triage
 GET  /officer/complaints/{complaint_id}/triage
 POST /officer/complaints/{complaint_id}/evidence/{evidence_id}/analysis
@@ -147,6 +148,37 @@ GET  /admin/analytics
 ```
 
 Admin actions require elevated permissions and should create audit records.
+
+As implemented (Phase 10), `/admin/audit-logs` is a read-only, filterable
+listing (`actor_user_id`, `action`, `entity_type`, `entity_id`, `date_from`,
+`date_to`, pagination) over `app.repositories.audit_log_repository.list_logs`
+- there is intentionally no corresponding write/update/delete endpoint,
+since audit records are only ever created as a side effect of the action
+they describe (see section 19 below). `/admin/analytics` and
+`/officer/analytics` return the statewide/district-scoped KPI payloads from
+`app.services.analytics_service`.
+
+## 8.1 Notifications
+
+Notifications are not role-specific - every authenticated identity manages
+its own inbox through one shared, top-level resource rather than being
+duplicated under `/citizen`, `/officer`, `/inspector`, and `/admin`:
+
+```text
+GET   /notifications
+GET   /notifications/unread-count
+PATCH /notifications/{notification_id}/read
+POST  /notifications/read-all
+```
+
+Scope is always the authenticated user's own `user_id` - there is no
+parameter to request another user's notifications. See
+docs/PROJECT_SPEC.md section 27 for the workflow events that create them
+(complaint submitted/verified/rejected/resolved, inspector assigned,
+inspection scheduled/completed) - each is written by the same service call
+that performs the triggering action
+(`app.services.complaint_service`/`app.services.assignment_service`), never
+by a separate notification job.
 
 ## 11. Agent Endpoints
 

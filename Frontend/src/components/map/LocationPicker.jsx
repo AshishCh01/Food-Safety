@@ -1,6 +1,9 @@
 import { useState } from 'react';
+import { LocateFixed } from 'lucide-react';
 import { MapContainer, Marker, TileLayer, useMapEvents } from 'react-leaflet';
 import { locationPinIcon } from './markerIcons';
+import Alert from '../ui/Alert';
+import Button from '../ui/Button';
 
 const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 const OSM_ATTRIBUTION = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
@@ -29,13 +32,13 @@ function LocationPicker({ latitude, longitude, onChange }) {
     setLocationError(null);
     navigator.geolocation.getCurrentPosition(
       (position) => onChange(position.coords.latitude, position.coords.longitude),
-      () => setLocationError('Could not access your location.')
+      () => setLocationError('Could not access your location.'),
     );
   }
 
   return (
-    <div className="location-picker">
-      <div className="map-container map-container-picker">
+    <div className="flex flex-col gap-2">
+      <div className="h-64 w-full overflow-hidden rounded-lg border border-slate-200 sm:h-80">
         <MapContainer
           center={hasPoint ? [latitude, longitude] : DEFAULT_CENTER}
           zoom={hasPoint ? PICKED_ZOOM : DEFAULT_ZOOM}
@@ -59,18 +62,19 @@ function LocationPicker({ latitude, longitude, onChange }) {
           )}
         </MapContainer>
       </div>
-      <div className="location-row">
-        <button type="button" onClick={useMyLocation}>
+      <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
+        <Button type="button" variant="secondary" size="sm" onClick={useMyLocation}>
+          <LocateFixed className="size-4" aria-hidden="true" />
           Use my current location
-        </button>
+        </Button>
         <span>Or click the map to drop a pin</span>
         {hasPoint && (
-          <span>
+          <span className="font-mono text-xs text-slate-500">
             {Number(latitude).toFixed(5)}, {Number(longitude).toFixed(5)}
           </span>
         )}
       </div>
-      {locationError && <p className="form-error">{locationError}</p>}
+      {locationError && <Alert tone="danger">{locationError}</Alert>}
     </div>
   );
 }

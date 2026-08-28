@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import Home from './Home';
 
@@ -14,7 +15,11 @@ describe('Home', () => {
       ),
     );
 
-    render(<Home />);
+    render(
+      <MemoryRouter>
+        <Home />
+      </MemoryRouter>,
+    );
 
     expect(
       screen.getByText('Maharashtra Food Safety Platform'),

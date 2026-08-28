@@ -1,7 +1,11 @@
+import { ShieldCheck } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { dashboardPathForRole } from '../../utils/permissions';
+import Button from '../ui/Button';
 
+/** Header for the public/unauthenticated routes (Home, Login, Register).
+ * Authenticated app pages use AppShell's Topbar instead. */
 function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
@@ -12,29 +16,39 @@ function Navbar() {
   }
 
   return (
-    <nav className="navbar">
-      <Link to="/" className="navbar-brand">
-        Maharashtra Food Safety Platform
-      </Link>
-      <div className="navbar-links">
-        {isAuthenticated ? (
-          <>
-            <Link to={dashboardPathForRole(user.role)}>Dashboard</Link>
-            <span className="navbar-user">
-              {user.full_name} ({user.role})
-            </span>
-            <button type="button" onClick={handleLogout}>
-              Log out
-            </button>
-          </>
-        ) : (
-          <>
-            <Link to="/login">Log in</Link>
-            <Link to="/register">Register</Link>
-          </>
-        )}
+    <header className="border-b border-slate-200 bg-white">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+        <Link to="/" className="flex items-center gap-2 font-semibold text-slate-900">
+          <ShieldCheck className="size-6 text-brand-700" aria-hidden="true" />
+          <span className="hidden sm:inline">Maharashtra Food Safety Platform</span>
+          <span className="sm:hidden">MFSP</span>
+        </Link>
+        <nav className="flex items-center gap-3">
+          {isAuthenticated ? (
+            <>
+              <Link
+                to={dashboardPathForRole(user.role)}
+                className="text-sm font-medium text-slate-600 hover:text-brand-700"
+              >
+                Dashboard
+              </Link>
+              <Button variant="secondary" size="sm" onClick={handleLogout}>
+                Log out
+              </Button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="text-sm font-medium text-slate-600 hover:text-brand-700">
+                Log in
+              </Link>
+              <Button size="sm" onClick={() => navigate('/register')}>
+                Register
+              </Button>
+            </>
+          )}
+        </nav>
       </div>
-    </nav>
+    </header>
   );
 }
 

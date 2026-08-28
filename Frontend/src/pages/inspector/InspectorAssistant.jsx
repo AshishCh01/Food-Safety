@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import AssistantChat from '../../components/agent/AssistantChat';
+import ContentContainer from '../../components/layout/ContentContainer';
+import PageHeader from '../../components/layout/PageHeader';
+import Card from '../../components/ui/Card';
 import { useAuth } from '../../hooks/useAuth';
 import { createAssistantConversation, getAssistantConversation, sendAssistantMessage } from '../../services/agentService';
 
@@ -9,22 +12,18 @@ import { createAssistantConversation, getAssistantConversation, sendAssistantMes
 function InspectorAssistant() {
   const { getAccessToken } = useAuth();
   const [conversation, setConversation] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState(null);
+  const isLoading = !conversation && !error;
 
   useEffect(() => {
     let cancelled = false;
-    setIsLoading(true);
     createAssistantConversation(getAccessToken())
       .then((data) => {
         if (!cancelled) setConversation(data);
       })
       .catch((err) => {
         if (!cancelled) setError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
       });
     return () => {
       cancelled = true;
@@ -46,24 +45,25 @@ function InspectorAssistant() {
         setIsSending(false);
       }
     },
-    [conversation, getAccessToken]
+    [conversation, getAccessToken],
   );
 
   return (
-    <section>
-      <h1>Inspector Assistant</h1>
-      <p>
-        Ask about food-safety regulations, inspection guidelines, or procedures. Answers are advisory only and
-        always show their sources - they never replace your own judgement or a formal finding.
-      </p>
-      <AssistantChat
-        messages={conversation ? conversation.messages : []}
-        onSend={handleSend}
-        isSending={isSending}
-        error={error}
-        isLoading={isLoading}
+    <ContentContainer className="max-w-3xl">
+      <PageHeader
+        title="Inspector Assistant"
+        description="Ask about food-safety regulations, inspection guidelines, or procedures. Answers are advisory only and always show their sources - they never replace your own judgement or a formal finding."
       />
-    </section>
+      <Card>
+        <AssistantChat
+          messages={conversation ? conversation.messages : []}
+          onSend={handleSend}
+          isSending={isSending}
+          error={error}
+          isLoading={isLoading}
+        />
+      </Card>
+    </ContentContainer>
   );
 }
 

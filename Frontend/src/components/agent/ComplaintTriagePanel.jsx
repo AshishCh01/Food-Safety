@@ -1,104 +1,96 @@
+import { PRIORITIES, configFor } from '../../utils/statusConfig';
+import { formatDateTime } from '../../utils/formatters';
+import Badge from '../ui/Badge';
+import DetailGrid from '../ui/DetailGrid';
+import AiResultPanel, { AiMeta, AiSection, UncertainBanner } from './AiResultPanel';
+
 // Displays the AI Complaint Triage Agent's most recent result and lets an
 // officer (re-)run it on demand. Everything here is clearly framed as
 // AI-generated and advisory - it never represents an official officer
 // decision, and running it never changes the complaint itself.
 function ComplaintTriagePanel({ triage, isRunning, error, onRun }) {
+  const priorityTone = triage ? configFor(PRIORITIES, triage.suggested_priority).tone : 'neutral';
+
   return (
-    <section className="ai-triage-panel">
-      <div className="page-header">
-        <h2>AI Triage (Advisory)</h2>
-        <button type="button" onClick={onRun} disabled={isRunning}>
-          {isRunning ? 'Running AI triage...' : triage ? 'Re-run AI triage' : 'Run AI triage'}
-        </button>
-      </div>
-
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
+    <AiResultPanel
+      title="AI Triage (Advisory)"
+      hasResult={Boolean(triage)}
+      isRunning={isRunning}
+      error={error}
+      status={triage?.status}
+      failureMessage={`The last AI triage attempt failed: ${triage?.error_message || 'Unknown error.'}`}
+      emptyMessage="No AI analysis yet. Running it suggests a category, priority, and summary for your review - it does not change the complaint or its status."
+      onRun={onRun}
+      runLabel="Run AI triage"
+      rerunLabel="Re-run AI triage"
+      runningLabel="Running AI triage…"
+    >
+      {triage?.is_uncertain && (
+        <UncertainBanner>
+          AI confidence is low
+          {triage.category_match_uncertain ? ' and the category could not be matched confidently' : ''}. Treat this
+          suggestion with caution and review the complaint yourself.
+        </UncertainBanner>
       )}
 
-      {!triage && !error && !isRunning && (
-        <p className="ai-triage-empty">
-          No AI analysis yet. Running it suggests a category, priority, and summary for your review - it does not
-          change the complaint or its status.
-        </p>
+      <DetailGrid>
+        <dt>Suggested category</dt>
+        <dd>
+          {triage?.suggested_category_name || 'Uncertain'}
+          {triage?.category_match_uncertain && triage.suggested_category_raw && (
+            <span className="ml-1 text-xs text-slate-500">(model said &ldquo;{triage.suggested_category_raw}&rdquo;)</span>
+          )}
+        </dd>
+        <dt>Suggested priority</dt>
+        <dd>
+          <Badge tone={priorityTone}>{triage?.suggested_priority}</Badge>
+        </dd>
+        <dt>Confidence</dt>
+        <dd>{triage?.confidence !== null && triage?.confidence !== undefined ? `${Math.round(triage.confidence * 100)}%` : 'Unknown'}</dd>
+      </DetailGrid>
+
+      {triage?.summary && (
+        <AiSection title="AI summary">
+          <p>{triage.summary}</p>
+        </AiSection>
       )}
 
-      {triage && triage.status === 'failed' && (
-        <p className="form-error" role="alert">
-          The last AI triage attempt failed: {triage.error_message || 'Unknown error.'}
-        </p>
+      {(triage?.entities?.business_name || triage?.entities?.product) && (
+        <AiSection title="Extracted business/product details">
+          <DetailGrid>
+            {triage.entities.business_name && (
+              <>
+                <dt>Business name</dt>
+                <dd>{triage.entities.business_name}</dd>
+              </>
+            )}
+            {triage.entities.product && (
+              <>
+                <dt>Product</dt>
+                <dd>{triage.entities.product}</dd>
+              </>
+            )}
+          </DetailGrid>
+        </AiSection>
       )}
 
-      {triage && triage.status === 'completed' && (
-        <>
-          {triage.is_uncertain && (
-            <p className="ai-triage-uncertain-banner" role="alert">
-              AI confidence is low{triage.category_match_uncertain ? ' and the category could not be matched confidently' : ''}.
-              Treat this suggestion with caution and review the complaint yourself.
-            </p>
-          )}
-
-          <dl className="complaint-detail-grid">
-            <dt>Suggested category</dt>
-            <dd>
-              {triage.suggested_category_name || 'Uncertain'}
-              {triage.category_match_uncertain && triage.suggested_category_raw && (
-                <span className="field-hint"> (model said "{triage.suggested_category_raw}")</span>
-              )}
-            </dd>
-            <dt>Suggested priority</dt>
-            <dd className={`priority-tag priority-${triage.suggested_priority}`}>{triage.suggested_priority}</dd>
-            <dt>Confidence</dt>
-            <dd>{triage.confidence !== null ? `${Math.round(triage.confidence * 100)}%` : 'Unknown'}</dd>
-          </dl>
-
-          {triage.summary && (
-            <>
-              <h3>AI summary</h3>
-              <p>{triage.summary}</p>
-            </>
-          )}
-
-          {(triage.entities?.business_name || triage.entities?.product) && (
-            <>
-              <h3>Extracted business/product details</h3>
-              <dl className="complaint-detail-grid">
-                {triage.entities.business_name && (
-                  <>
-                    <dt>Business name</dt>
-                    <dd>{triage.entities.business_name}</dd>
-                  </>
-                )}
-                {triage.entities.product && (
-                  <>
-                    <dt>Product</dt>
-                    <dd>{triage.entities.product}</dd>
-                  </>
-                )}
-              </dl>
-            </>
-          )}
-
-          {triage.missing_information && triage.missing_information.length > 0 && (
-            <>
-              <h3>Missing or useful evidence</h3>
-              <ul>
-                {triage.missing_information.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </>
-          )}
-
-          <p className="ai-triage-meta">
-            Generated by {triage.model_used} on {new Date(triage.created_at).toLocaleString()}. This is an AI
-            suggestion only - it does not change the complaint's category, priority, or status.
-          </p>
-        </>
+      {triage?.missing_information && triage.missing_information.length > 0 && (
+        <AiSection title="Missing or useful evidence">
+          <ul className="list-disc space-y-0.5 pl-5">
+            {triage.missing_information.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </AiSection>
       )}
-    </section>
+
+      {triage && (
+        <AiMeta>
+          Generated by {triage.model_used} on {formatDateTime(triage.created_at)}. This is an AI suggestion only - it
+          does not change the complaint&apos;s category, priority, or status.
+        </AiMeta>
+      )}
+    </AiResultPanel>
   );
 }
 

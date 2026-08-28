@@ -1,8 +1,14 @@
 import { useState } from 'react';
-import LocationPicker from '../map/LocationPicker';
+import { PRIORITIES } from '../../utils/statusConfig';
 import { reverseGeocode } from '../../services/mapService';
-
-const PRIORITIES = ['low', 'medium', 'high', 'critical'];
+import LocationPicker from '../map/LocationPicker';
+import Alert from '../ui/Alert';
+import Button from '../ui/Button';
+import Card from '../ui/Card';
+import FormField from '../ui/FormField';
+import Input from '../ui/Input';
+import Select from '../ui/Select';
+import Textarea from '../ui/Textarea';
 
 const INITIAL_FORM = {
   categoryId: '',
@@ -64,110 +70,107 @@ function ComplaintForm({ categories, districts, onSubmit, isSubmitting, error, t
   }
 
   return (
-    <form onSubmit={handleSubmit} className="complaint-form">
-      <label htmlFor="complaint-category">
-        Category
-        <select id="complaint-category" value={form.categoryId} onChange={updateField('categoryId')} required>
-          <option value="">Select a category</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
-      </label>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <Card className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label="Category" htmlFor="complaint-category" required>
+          <Select id="complaint-category" value={form.categoryId} onChange={updateField('categoryId')} required>
+            <option value="">Select a category</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
 
-      <label htmlFor="complaint-district">
-        District
-        <select id="complaint-district" value={form.districtId} onChange={updateField('districtId')} required>
-          <option value="">Select a district</option>
-          {districts.map((district) => (
-            <option key={district.id} value={district.id}>
-              {district.name}
-            </option>
-          ))}
-        </select>
-      </label>
+        <FormField label="District" htmlFor="complaint-district" required>
+          <Select id="complaint-district" value={form.districtId} onChange={updateField('districtId')} required>
+            <option value="">Select a district</option>
+            {districts.map((district) => (
+              <option key={district.id} value={district.id}>
+                {district.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
 
-      <label htmlFor="complaint-title">
-        Title
-        <input id="complaint-title" value={form.title} onChange={updateField('title')} minLength={3} required />
-      </label>
+        <FormField label="Title" htmlFor="complaint-title" required className="sm:col-span-2">
+          <Input id="complaint-title" value={form.title} onChange={updateField('title')} minLength={3} required />
+        </FormField>
 
-      <label htmlFor="complaint-description">
-        Description
-        <textarea
-          id="complaint-description"
-          value={form.description}
-          onChange={updateField('description')}
-          minLength={10}
-          rows={5}
-          required
-        />
-      </label>
-
-      <label htmlFor="complaint-priority">
-        Priority
-        <select id="complaint-priority" value={form.priority} onChange={updateField('priority')}>
-          {PRIORITIES.map((priority) => (
-            <option key={priority} value={priority}>
-              {priority}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label htmlFor="complaint-address">
-        Location description
-        <input id="complaint-address" value={form.addressLine} onChange={updateField('addressLine')} />
-      </label>
-
-      <label>
-        Pin the location on the map (optional)
-        <LocationPicker latitude={form.latitude} longitude={form.longitude} onChange={handleLocationChange} />
-        <span className="field-hint">
-          If you pin a location, the district above is confirmed automatically from it.
-        </span>
-      </label>
-
-      <fieldset>
-        <legend>Business / shop details</legend>
-        <label htmlFor="business-name">
-          Business name
-          <input id="business-name" value={form.businessName} onChange={updateField('businessName')} required />
-        </label>
-        <label htmlFor="business-type">
-          Business type (optional)
-          <input id="business-type" value={form.businessType} onChange={updateField('businessType')} />
-        </label>
-        <label htmlFor="business-address">
-          Business address
-          <input
-            id="business-address"
-            value={form.businessAddress}
-            onChange={updateField('businessAddress')}
+        <FormField label="Description" htmlFor="complaint-description" required className="sm:col-span-2">
+          <Textarea
+            id="complaint-description"
+            value={form.description}
+            onChange={updateField('description')}
+            minLength={10}
+            rows={5}
             required
           />
-        </label>
-        <label htmlFor="business-phone">
-          Business phone (optional)
-          <input id="business-phone" value={form.businessPhone} onChange={updateField('businessPhone')} />
-        </label>
-        <label htmlFor="business-license">
-          License number (optional)
-          <input id="business-license" value={form.businessLicense} onChange={updateField('businessLicense')} />
-        </label>
-      </fieldset>
+        </FormField>
 
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
+        <FormField label="Priority" htmlFor="complaint-priority">
+          <Select id="complaint-priority" value={form.priority} onChange={updateField('priority')}>
+            {PRIORITIES.map((priority) => (
+              <option key={priority.value} value={priority.value}>
+                {priority.label}
+              </option>
+            ))}
+          </Select>
+        </FormField>
 
-      <button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? 'Submitting...' : 'Submit complaint'}
-      </button>
+        <FormField label="Location description" htmlFor="complaint-address">
+          <Input id="complaint-address" value={form.addressLine} onChange={updateField('addressLine')} />
+        </FormField>
+
+        <FormField
+          label="Pin the location on the map (optional)"
+          htmlFor="complaint-location-picker"
+          hint="If you pin a location, the district above is confirmed automatically from it."
+          className="sm:col-span-2"
+        >
+          <LocationPicker
+            id="complaint-location-picker"
+            latitude={form.latitude}
+            longitude={form.longitude}
+            onChange={handleLocationChange}
+          />
+        </FormField>
+      </Card>
+
+      <Card>
+        <Card.Header>
+          <Card.Title>Business / shop details</Card.Title>
+        </Card.Header>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <FormField label="Business name" htmlFor="business-name" required className="sm:col-span-2">
+            <Input id="business-name" value={form.businessName} onChange={updateField('businessName')} required />
+          </FormField>
+          <FormField label="Business type" htmlFor="business-type" hint="Optional">
+            <Input id="business-type" value={form.businessType} onChange={updateField('businessType')} />
+          </FormField>
+          <FormField label="License number" htmlFor="business-license" hint="Optional">
+            <Input id="business-license" value={form.businessLicense} onChange={updateField('businessLicense')} />
+          </FormField>
+          <FormField label="Business address" htmlFor="business-address" required className="sm:col-span-2">
+            <Input
+              id="business-address"
+              value={form.businessAddress}
+              onChange={updateField('businessAddress')}
+              required
+            />
+          </FormField>
+          <FormField label="Business phone" htmlFor="business-phone" hint="Optional">
+            <Input id="business-phone" value={form.businessPhone} onChange={updateField('businessPhone')} />
+          </FormField>
+        </div>
+      </Card>
+
+      {error && <Alert tone="danger">{error}</Alert>}
+
+      <Button type="submit" loading={isSubmitting} className="self-start">
+        {isSubmitting ? 'Submitting…' : 'Submit complaint'}
+      </Button>
     </form>
   );
 }

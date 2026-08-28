@@ -2,6 +2,18 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { assignInspector, getDistrictComplaint, listInspectors } from '../../services/complaintService';
+import ContentContainer from '../../components/layout/ContentContainer';
+import PageHeader from '../../components/layout/PageHeader';
+import Alert from '../../components/ui/Alert';
+import Button from '../../components/ui/Button';
+import Card from '../../components/ui/Card';
+import EmptyState from '../../components/ui/EmptyState';
+import ErrorState from '../../components/ui/ErrorState';
+import FormField from '../../components/ui/FormField';
+import Input from '../../components/ui/Input';
+import Select from '../../components/ui/Select';
+import Skeleton from '../../components/ui/Skeleton';
+import Textarea from '../../components/ui/Textarea';
 
 function AssignInspector() {
   const { complaintId } = useParams();
@@ -33,7 +45,7 @@ function AssignInspector() {
       await assignInspector(
         complaintId,
         { inspectorStaffId, dueAt: dueAt ? new Date(dueAt).toISOString() : null, notes },
-        getAccessToken()
+        getAccessToken(),
       );
       navigate(`/officer/complaints/${complaintId}`, { replace: true });
     } catch (err) {
@@ -44,23 +56,26 @@ function AssignInspector() {
   }
 
   if (!complaint) {
-    return error ? <p className="form-error">{error}</p> : <p>Loading...</p>;
+    return (
+      <ContentContainer className="max-w-xl">
+        {error ? <ErrorState message={error} /> : <Skeleton.List rows={3} />}
+      </ContentContainer>
+    );
   }
 
   return (
-    <section>
-      <h1>Assign an inspector</h1>
-      <p>
-        {complaint.complaint_number} &middot; {complaint.title}
-      </p>
+    <ContentContainer className="max-w-xl">
+      <PageHeader
+        title="Assign an inspector"
+        description={`${complaint.complaint_number} · ${complaint.title}`}
+      />
 
       {inspectors.length === 0 ? (
-        <p>No active inspectors are available in your district.</p>
+        <EmptyState title="No active inspectors are available in your district." />
       ) : (
-        <form onSubmit={handleSubmit} className="status-update-form">
-          <label htmlFor="inspector-select">
-            Inspector
-            <select
+        <Card as="form" onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <FormField label="Inspector" htmlFor="inspector-select" required>
+            <Select
               id="inspector-select"
               value={inspectorStaffId}
               onChange={(event) => setInspectorStaffId(event.target.value)}
@@ -72,27 +87,21 @@ function AssignInspector() {
                   {inspector.full_name} ({inspector.employee_code})
                 </option>
               ))}
-            </select>
-          </label>
-          <label htmlFor="due-at">
-            Due date (optional)
-            <input id="due-at" type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)} />
-          </label>
-          <label htmlFor="assignment-notes">
-            Notes (optional)
-            <textarea id="assignment-notes" value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} />
-          </label>
-          {error && (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          )}
-          <button type="submit" disabled={!inspectorStaffId || isSubmitting}>
-            {isSubmitting ? 'Assigning...' : 'Assign inspector'}
-          </button>
-        </form>
+            </Select>
+          </FormField>
+          <FormField label="Due date" htmlFor="due-at" hint="Optional">
+            <Input id="due-at" type="date" value={dueAt} onChange={(event) => setDueAt(event.target.value)} />
+          </FormField>
+          <FormField label="Notes" htmlFor="assignment-notes" hint="Optional">
+            <Textarea id="assignment-notes" value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} />
+          </FormField>
+          {error && <Alert tone="danger">{error}</Alert>}
+          <Button type="submit" disabled={!inspectorStaffId} loading={isSubmitting} className="self-start">
+            {isSubmitting ? 'Assigning…' : 'Assign inspector'}
+          </Button>
+        </Card>
       )}
-    </section>
+    </ContentContainer>
   );
 }
 

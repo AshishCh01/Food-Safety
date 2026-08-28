@@ -6,10 +6,10 @@ from sqlalchemy.orm import Session
 from app.models.assignment import Assignment
 from app.models.complaint import Complaint
 from app.models.staff_profile import StaffProfile
-from app.repositories import assignment_repository, audit_log_repository, staff_repository
+from app.repositories import assignment_repository, audit_log_repository, notification_repository, staff_repository
 from app.schemas.assignment import AssignmentRead, AssignmentSummary
 from app.services import complaint_service
-from app.utils.enums import ComplaintStatus, UserRole
+from app.utils.enums import ComplaintStatus, NotificationType, UserRole
 from app.utils.exceptions import AssignmentNotFoundError, InvalidAssignmentError, NotFoundError
 
 
@@ -50,6 +50,16 @@ def assign_inspector(
         entity_type="assignment",
         entity_id=assignment.id,
         details={"complaint_id": str(complaint.id), "inspector_staff_id": str(inspector.id)},
+    )
+
+    notification_repository.create(
+        db,
+        user_id=inspector.user_id,
+        type=NotificationType.INSPECTOR_ASSIGNED,
+        title="New Case Assigned",
+        message=f"You have been assigned to inspect complaint {complaint.complaint_number}.",
+        entity_type="complaint",
+        entity_id=complaint.id,
     )
 
     complaint_service.apply_system_transition(

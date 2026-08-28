@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import ComplaintStatus from '../../components/complaint/ComplaintStatus';
+import ContentContainer from '../../components/layout/ContentContainer';
+import PageHeader from '../../components/layout/PageHeader';
+import Badge from '../../components/ui/Badge';
+import EmptyState from '../../components/ui/EmptyState';
+import ErrorState from '../../components/ui/ErrorState';
+import FormField from '../../components/ui/FormField';
+import Pagination from '../../components/ui/Pagination';
+import Select from '../../components/ui/Select';
+import Skeleton from '../../components/ui/Skeleton';
 import { useAuth } from '../../hooks/useAuth';
+import { formatDate } from '../../utils/formatters';
+import { ASSIGNMENT_STATUSES, configFor } from '../../utils/statusConfig';
 import { listAssignments } from '../../services/inspectionService';
 
 const PAGE_SIZE = 10;
@@ -20,15 +30,12 @@ function AssignedComplaints() {
       .catch((err) => setError(err.message));
   }, [getAccessToken, status, page]);
 
-  const totalPages = result ? Math.max(1, Math.ceil(result.total / PAGE_SIZE)) : 1;
-
   return (
-    <section>
-      <h1>My Assigned Complaints</h1>
+    <ContentContainer>
+      <PageHeader title="My Assigned Complaints" />
 
-      <label htmlFor="assignment-status-filter">
-        Status
-        <select
+      <FormField label="Status" htmlFor="assignment-status-filter" className="max-w-xs">
+        <Select
           id="assignment-status-filter"
           value={status}
           onChange={(event) => {
@@ -37,45 +44,42 @@ function AssignedComplaints() {
           }}
         >
           <option value="">All</option>
-          <option value="assigned">Assigned</option>
-          <option value="in_progress">In progress</option>
-          <option value="completed">Completed</option>
-        </select>
-      </label>
+          {ASSIGNMENT_STATUSES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </Select>
+      </FormField>
 
-      {error && <p className="form-error">{error}</p>}
+      {error && <ErrorState message={error} />}
 
-      {result && result.items.length === 0 && <p>No assignments found.</p>}
+      {!result && !error && <Skeleton.List rows={4} />}
 
-      <div className="complaint-list">
-        {result?.items.map((assignment) => (
-          <Link key={assignment.id} to={`/inspector/assignments/${assignment.id}`} className="complaint-card">
-            <div className="complaint-card-header">
-              <span className="complaint-number">{assignment.complaint_number}</span>
-              <ComplaintStatus status={assignment.status} />
-            </div>
-            <h3>{assignment.complaint_title}</h3>
-            {assignment.due_at && (
-              <span className="complaint-card-date">Due {new Date(assignment.due_at).toLocaleDateString()}</span>
-            )}
-          </Link>
-        ))}
+      {result && result.items.length === 0 && <EmptyState title="No assignments found." />}
+
+      <div className="flex flex-col gap-3">
+        {result?.items.map((assignment) => {
+          const assignmentStatus = configFor(ASSIGNMENT_STATUSES, assignment.status);
+          return (
+            <Link
+              key={assignment.id}
+              to={`/inspector/assignments/${assignment.id}`}
+              className="block rounded-lg border border-slate-200 bg-white p-4 transition-colors hover:border-brand-300 hover:bg-brand-50/30"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-xs text-slate-500">{assignment.complaint_number}</span>
+                <Badge tone={assignmentStatus.tone}>{assignmentStatus.label}</Badge>
+              </div>
+              <h3 className="mt-1.5 font-medium text-slate-900">{assignment.complaint_title}</h3>
+              {assignment.due_at && <p className="mt-2 text-xs text-slate-400">Due {formatDate(assignment.due_at)}</p>}
+            </Link>
+          );
+        })}
       </div>
 
-      {result && result.total > PAGE_SIZE && (
-        <div className="pagination">
-          <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            Previous
-          </button>
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-            Next
-          </button>
-        </div>
-      )}
-    </section>
+      {result && <Pagination page={page} pageSize={PAGE_SIZE} total={result.total} onPageChange={setPage} />}
+    </ContentContainer>
   );
 }
 

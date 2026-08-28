@@ -1,20 +1,10 @@
 # Development Roadmap
 
-> **Phase numbering note:** this document's phase numbers (below, from Phase
-> 6 onward) diverge from `docs/PROJECT_SPEC.md` section 30, which is what was
-> actually built: PROJECT_SPEC orders Complaint Triage as Phase 6 and
-> Evidence Analysis as Phase 7, both ahead of RAG (Phase 8) and Investigation
-> (Phase 9); this document instead orders RAG (6) and Inspector Assistant (7)
-> ahead of Triage (8) and Evidence (9). `docs/ARCHITECTURE_TREE.md`'s own
-> source-of-truth priority list ranks `PROJECT_SPEC.md` above this document,
-> and the codebase has followed PROJECT_SPEC's ordering (Complaint Triage and
-> Evidence Analysis are already built, ahead of RAG). Treat PROJECT_SPEC.md's
-> phase order as authoritative for phases 6+; the section headings below are
-> left as originally written rather than renumbered.
-
 ## 1. Goal
 
 Build the Maharashtra Food Safety Complaint and Inspection Platform incrementally using Claude Code in VS Code, with every phase producing a working and testable increment.
+
+The roadmap reflects the actual implementation order used by the project. `PROJECT_SPEC.md` remains the primary product specification; this document defines the practical development sequence.
 
 ## 2. Working Method
 
@@ -22,11 +12,11 @@ For every phase:
 
 1. Read the project specification and relevant architecture docs.
 2. Inspect the current codebase before changing it.
-3. Implement only the defined phase scope.
-4. Run lint/type checks/tests.
+3. Implement the defined phase scope while preserving the existing architecture.
+4. Run relevant tests, lint, build, and migration checks.
 5. Review the git diff.
 6. Update relevant documentation.
-7. Commit the phase in git.
+7. Commit the completed phase in git.
 
 Do not ask Claude Code to implement the whole project in one prompt.
 
@@ -70,7 +60,7 @@ alembic -> migration works
 Docker -> services start successfully
 ```
 
-## 5. Phase 2 — Authentication and RBAC
+## 5. Phase 2 — Authentication, RBAC, and Maharashtra District Structure
 
 Build:
 
@@ -82,7 +72,7 @@ Build:
 - staff provisioning
 - district scope enforcement
 
-Seed:
+Seed/configure:
 
 - six divisions
 - 36 districts
@@ -104,13 +94,15 @@ Build:
 - complaint creation
 - complaint numbers
 - evidence metadata
+- Supabase Storage evidence pipeline
 - complaint timeline
 - status workflow
 - citizen dashboard
+- reusable centralized Gemini AI service foundation
 
 Completion:
 
-A citizen can create a complaint and track it from submission onward.
+A citizen can create a complaint, attach evidence, and track it from submission onward.
 
 ## 7. Phase 4 — Officer and Inspector Operations
 
@@ -125,7 +117,7 @@ Build:
 - inspection records
 - findings
 - inspection evidence
-- report draft
+- inspection lifecycle
 - audit history
 
 Completion:
@@ -142,82 +134,92 @@ Build:
 
 - PostGIS support
 - Leaflet map
+- OpenStreetMap integration
 - complaint markers
 - district filtering
-- location-based business lookup
-- district derivation/validation from coordinates where feasible
+- location-based business/complaint lookup
+- incident location selection
+- reverse geocoding where appropriate
+- district derivation/validation from coordinates
+
+Current implementation note:
+
+- The current district resolver uses nearest district centroid approximation where real district polygons are not yet available.
+- The long-term GIS improvement is point-in-polygon resolution using authoritative Maharashtra district boundary data and PostGIS `ST_Contains` or equivalent.
 
 Completion:
 
-District officers see only their district on operational maps while admins can view statewide data.
+District officers see only their district on operational maps while admins can view statewide data, and location-aware complaints can be created and queried.
 
-## 9. Phase 6 — RAG Foundation
+## 9. Phase 6 — Complaint Triage Agent
+
+Build:
+
+- complaint classification using the existing database taxonomy
+- summary generation
+- business/product entity extraction
+- missing-information detection
+- priority/severity suggestion
+- structured Gemini output validation
+- AI uncertainty handling
+- retry/error normalization
+- persisted triage results separate from the original complaint
+- officer-facing triage result
+
+Completion:
+
+A representative complaint can be analyzed into a validated advisory triage result without changing the original citizen complaint or official workflow state.
+
+## 10. Phase 7 — Evidence Analysis Agent
+
+Build:
+
+- multimodal Gemini analysis
+- OCR/text extraction from supported evidence
+- product/manufacturer/batch/date extraction where visible
+- expiry/best-before extraction
+- packaging and hygiene observations
+- confidence/uncertainty
+- deterministic possible-expiry evaluation from extracted date data
+- persisted evidence-analysis results separate from raw evidence
+- officer/inspector-facing evidence analysis
+
+Completion:
+
+The system can analyze supported evidence types and clearly distinguish AI observations from confirmed findings.
+
+## 11. Phase 8 — RAG and Inspector Assistant
 
 Build:
 
 - approved source document storage
 - parsing
-- chunking
+- heading-aware/page-aware chunking
 - metadata extraction
-- embeddings
-- pgvector tables/indexing
-- retrieval API/service
-- citation metadata
-
-Start with a small high-quality corpus.
-
-Completion:
-
-A benchmark set of inspector questions retrieves relevant source passages with correct citations.
-
-## 10. Phase 7 — Inspector Assistant Agent
-
-Build:
-
-- agent orchestrator
+- Gemini embeddings
+- pgvector tables and indexing
+- vector retrieval
+- source/page/section citation tracking
 - Inspector Assistant
-- controlled tools
-- RAG integration
-- complaint/inspection context retrieval
-- structured responses
-- citations
+- controlled application-data tools
+- case-scoped and general assistant conversations
+- citation validation
 - human-review guardrails
 
-Completion:
+Knowledge base should initially focus on a small, high-quality corpus such as:
 
-Inspector can ask a question and receive an answer grounded in approved sources and authorized case data.
-
-## 11. Phase 8 — Complaint Triage Agent
-
-Build:
-
-- complaint classification
-- summary generation
-- entity extraction
-- missing-information detection
-- priority suggestion
-- structured output validation
+- FSSAI laws and regulations
+- hygiene and inspection guidance
+- sampling procedures
+- recall procedures
+- licensing/registration requirements
+- approved department SOPs
 
 Completion:
 
-Representative complaint test set achieves acceptable classification/extraction accuracy.
+An authorized inspector can ask a question and receive an answer grounded in approved sources and authorized case data with valid citations.
 
-## 12. Phase 9 — Evidence Analysis Agent
-
-Build:
-
-- OCR
-- image/vision analysis
-- expiry-date extraction
-- evidence summarization
-- analysis metadata
-- asynchronous processing
-
-Completion:
-
-System can analyze supported evidence types and clearly distinguish observations from confirmed findings.
-
-## 13. Phase 10 — Investigation Agent
+## 12. Phase 9 — Investigation Agent
 
 Build:
 
@@ -225,67 +227,114 @@ Build:
 - complaint history analysis
 - business history
 - inspection history
-- duplicate complaint detection
+- current evidence/evidence-analysis context
+- complaint triage context
+- relevant regulatory guidance retrieval
 - investigation brief generation
+- uncertainty and missing-information handling
+- cached investigation results and explicit re-investigation
 
 Completion:
 
-An officer can generate an investigation brief using only authorized district data.
+A district officer can generate an investigation brief using only authorized district data and retrieved authoritative guidance.
 
-## 14. Phase 11 — Analytics and Notifications
+## 13. Phase 10 — Operational Intelligence, Notifications, and Audit
 
 Build:
 
 - district KPIs
 - complaint trends
 - category distribution
-- resolution time metrics
+- resolution-time metrics
 - inspector workload
-- notifications
-- admin statewide analytics
+- business complaint-history views
+- statewide admin analytics
+- notification events and delivery handling
+- useful audit-log views and filters
+
+Analytics should be derived from operational data with reproducible queries. AI should not be required for basic reporting metrics.
 
 Completion:
 
-Dashboards show reproducible metrics sourced from the operational database.
+District officers and admins can monitor operational performance, workload, complaint trends, and important workflow events from reproducible database-backed metrics.
 
-## 15. Phase 12 — Security, Testing, and Hardening
+## 14. Phase 11 — UI/UX and Design System Refinement
+
+Build/refine:
+
+- consistent design system across citizen, officer, inspector, and admin areas
+- typography hierarchy
+- spacing and layout system
+- navigation and responsive behavior
+- form controls
+- tables and filters
+- status/priority indicators
+- map presentation
+- loading, empty, success, and error states
+- accessibility and contrast
+- mobile/responsive behavior
+- visual consistency across AI features
+
+Design direction:
+
+- modern public-service product
+- clean and professional
+- restrained color palette
+- information-dense officer workflows
+- subtle borders and shadows
+- purposeful use of cards
+- no unnecessary gradients, glassmorphism, glowing effects, oversized hero sections, or repetitive AI-chat styling
+
+AI output should feel integrated into the case-management workflow rather than presented as a generic chatbot unless a conversational assistant is actually appropriate.
+
+Completion:
+
+The application looks and behaves like one coherent product rather than a collection of independently generated screens.
+
+## 15. Phase 12 — Security, Testing, Performance, and Hardening
 
 Build/test:
 
 - RBAC tests
 - cross-district security tests
-- file upload tests
+- object/file access tests
 - API validation tests
 - agent tool authorization tests
-- prompt injection tests
-- performance checks
+- prompt-injection tests
+- secret-management checks
 - dependency/security scans
+- database query/performance checks
+- rate-limit handling where required
+- error handling and observability improvements
 
 Completion:
 
-Critical security tests pass and no known privileged secrets are committed.
+Critical security tests pass, privileged secrets are not committed, and major permission boundaries have automated coverage.
 
-## 16. Phase 13 — Deployment
+## 16. Phase 13 — Deployment and Production Readiness
 
 Build:
 
 - production Docker images
-- environment configuration
+- production environment configuration
 - CI/CD
 - HTTPS
 - database migration deployment process
-- logging/monitoring
+- structured logging
+- monitoring/health checks
 - backup/recovery plan
+- deployment documentation
+- production smoke-test checklist
 
 Completion:
 
-The application can be deployed reproducibly from a clean environment.
+The application can be deployed reproducibly from a clean environment and the production migration/runtime process is documented.
 
 ## 17. Git Strategy
 
 Use feature branches and small commits.
 
-Example:
+Suggested branch sequence:
 
 ```text
 phase-1-foundation
@@ -293,9 +342,14 @@ phase-2-auth-rbac
 phase-3-complaints
 phase-4-inspections
 phase-5-maps
-phase-6-rag
-phase-7-inspector-agent
-...
+phase-6-complaint-triage
+phase-7-evidence-ai
+phase-8-rag-inspector-assistant
+phase-9-investigation-agent
+phase-10-analytics-notifications
+phase-11-ui-ux
+phase-12-security-hardening
+phase-13-deployment
 ```
 
 Avoid large unreviewed commits generated by a single AI session.
@@ -306,35 +360,79 @@ Each implementation prompt should include:
 
 ```text
 Read:
+- CLAUDE.md
 - docs/PROJECT_SPEC.md
-- docs/SYSTEM_ARCHITECTURE.md
-- relevant phase documentation
+- relevant architecture documents
+- docs/DEVELOPMENT_ROADMAP.md
 
 Task:
 Implement only Phase X.
 
-Constraints:
-- preserve existing architecture
-- do not modify unrelated modules
+Guidance:
+- inspect the existing code first
+- preserve existing architecture where practical
+- avoid unnecessary restructuring
 - follow SQLAlchemy/Alembic rules
 - enforce RBAC server-side
 - add tests
+- update relevant documentation
 
 Validation:
 - run tests
-- run lint/type checks
+- run lint/build/type checks where applicable
+- verify migrations
 - report files changed
-- report any unresolved issues
+- report unresolved issues
 ```
 
 ## 19. Definition of Done
 
 A phase is complete only when:
 
-- feature works end-to-end
-- backend authorization is tested
-- database migrations are reviewed
+- feature works end-to-end for its intended scope
+- backend authorization is tested where relevant
+- database migrations are reviewed and applied to a real development database when required
 - frontend states are handled
 - tests pass
 - documentation is updated
 - no unrelated unfinished changes remain
+- known limitations are explicitly recorded
+
+## 20. Current Project Status
+
+As of the current roadmap update:
+
+```text
+✅ Phase 0  Specification and Repository Setup
+✅ Phase 1  Backend and Frontend Foundation
+✅ Phase 2  Authentication, RBAC, and Maharashtra District Structure
+✅ Phase 3  Core Complaint Management
+✅ Phase 4  Officer and Inspector Operations
+✅ Phase 5  Maps and Geographic Intelligence
+✅ Phase 6  Complaint Triage Agent
+✅ Phase 7  Evidence Analysis Agent
+✅ Phase 8  RAG and Inspector Assistant
+✅ Phase 9  Investigation Agent
+✅ Phase 10 Operational Intelligence, Notifications, and Audit
+✅ Phase 11 UI/UX and Design System Refinement
+➡️ Phase 12 Security, Testing, Performance, and Hardening
+⬜ Phase 13 Deployment and Production Readiness
+```
+
+Phase 11 delivered a Tailwind CSS v4 design system (`frontend/src/components/ui/`),
+a responsive app shell with sidebar/topbar/mobile drawer navigation
+(`components/layout/AppShell.jsx`), restrained Recharts-based analytics
+visualizations (`components/charts/`), and every existing page rebuilt on
+these primitives with consistent loading/empty/error states. It also closed
+three frontend integration gaps that had backend endpoints but no UI: admin
+staff management, a read-only business directory, and RAG knowledge-base
+document management (upload/list/ingest/deactivate) - see
+`docs/ARCHITECTURE_TREE.md`'s Build Status Note for the full file list. No
+backend behavior, API contracts, or database schema changed. Verified via
+the frontend unit/integration test suite (58 passing), `oxlint`, a
+production `vite build`, the full backend `pytest` suite (308 passing,
+unaffected), and manual browser verification (citizen, admin, and district
+officer/inspector flows exercised end-to-end against a running backend at
+desktop/tablet/mobile viewport widths).
+
+The next implementation phase is **Phase 12**.

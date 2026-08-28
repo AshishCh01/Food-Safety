@@ -15,6 +15,8 @@ from app.repositories import (
     complaint_sequence_repository,
     complaint_status_history_repository,
     district_repository,
+    notification_repository,
+    staff_repository,
 )
 from app.schemas.business import BusinessRead
 from app.schemas.complaint import (
@@ -25,7 +27,7 @@ from app.schemas.complaint import (
 )
 from app.schemas.complaint_status_history import ComplaintStatusHistoryRead
 from app.services import business_service, district_service
-from app.utils.enums import ComplaintPriority, ComplaintStatus
+from app.utils.enums import ComplaintPriority, ComplaintStatus, NotificationType, UserRole
 from app.utils.exceptions import (
     CategoryNotFoundError,
     ComplaintNotFoundError,
@@ -70,6 +72,46 @@ ALLOWED_TRANSITIONS: dict[ComplaintStatus, set[ComplaintStatus]] = {
     ComplaintStatus.RESOLVED: {
         ComplaintStatus.CLOSED,
     },
+}
+
+# Citizen-facing notifications fired when a complaint reaches one of these
+# statuses, regardless of whether the transition came from the officer's
+# freeform status update or a system-driven transition (assignment,
+# inspection lifecycle) - both funnel through _apply_transition below, so
+# this is the single place these notifications are triggered from. Statuses
+# not listed here (e.g. UNDER_REVIEW, NEEDS_INFORMATION) are not
+# notification-worthy per docs/PROJECT_SPEC.md section 27.
+_STATUS_NOTIFICATIONS: dict[ComplaintStatus, tuple[NotificationType, str, str]] = {
+    ComplaintStatus.VERIFIED: (
+        NotificationType.COMPLAINT_VERIFIED,
+        "Complaint Verified",
+        "Your complaint {number} has been verified by the district officer.",
+    ),
+    ComplaintStatus.REJECTED: (
+        NotificationType.COMPLAINT_REJECTED,
+        "Complaint Rejected",
+        "Your complaint {number} has been rejected.",
+    ),
+    ComplaintStatus.ASSIGNED: (
+        NotificationType.INSPECTOR_ASSIGNED,
+        "Inspector Assigned",
+        "An inspector has been assigned to your complaint {number}.",
+    ),
+    ComplaintStatus.INSPECTION_SCHEDULED: (
+        NotificationType.INSPECTION_SCHEDULED,
+        "Inspection Scheduled",
+        "An inspection has been scheduled for your complaint {number}.",
+    ),
+    ComplaintStatus.INSPECTION_COMPLETED: (
+        NotificationType.INSPECTION_COMPLETED,
+        "Inspection Completed",
+        "The inspection for your complaint {number} has been completed.",
+    ),
+    ComplaintStatus.RESOLVED: (
+        NotificationType.COMPLAINT_RESOLVED,
+        "Complaint Resolved",
+        "Your complaint {number} has been marked resolved.",
+    ),
 }
 
 
@@ -132,6 +174,26 @@ def create_complaint(db: Session, citizen: User, payload: ComplaintCreateRequest
         new_status=ComplaintStatus.SUBMITTED,
         changed_by_user_id=citizen.id,
     )
+
+    notification_repository.create(
+        db,
+        user_id=citizen.id,
+        type=NotificationType.COMPLAINT_SUBMITTED,
+        title="Complaint Submitted",
+        message=f"Your complaint {complaint.complaint_number} has been submitted and is awaiting review.",
+        entity_type="complaint",
+        entity_id=complaint.id,
+    )
+    for officer in staff_repository.list_by_district(db, district.id, role=UserRole.DISTRICT_OFFICER):
+        notification_repository.create(
+            db,
+            user_id=officer.user_id,
+            type=NotificationType.COMPLAINT_SUBMITTED,
+            title="New Complaint Submitted",
+            message=f"A new complaint {complaint.complaint_number} was submitted in your district.",
+            entity_type="complaint",
+            entity_id=complaint.id,
+        )
 
     db.commit()
     return complaint_repository.get_by_id(db, complaint.id)
@@ -223,6 +285,22 @@ def list_nearby_for_district(
     )
 
 
+def list_business_history_for_district(
+    db: Session,
+    district_id: uuid.UUID,
+    business_id: uuid.UUID,
+    *,
+    exclude_complaint_id: uuid.UUID | None = None,
+    limit: int = 50,
+) -> list[Complaint]:
+    """Prior complaints against a business, scoped to the caller's own
+    district so an officer can never see another district's history for a
+    business that also operates elsewhere."""
+    return complaint_repository.list_by_business(
+        db, business_id, district_id, exclude_complaint_id=exclude_complaint_id, limit=limit
+    )
+
+
 def _apply_transition(
     db: Session,
     complaint: Complaint,
@@ -254,6 +332,19 @@ def _apply_transition(
         entity_id=complaint.id,
         details={"old_status": old_status.value if old_status else None, "new_status": new_status.value},
     )
+
+    notice = _STATUS_NOTIFICATIONS.get(new_status)
+    if notice is not None:
+        notification_type, title, message_template = notice
+        notification_repository.create(
+            db,
+            user_id=complaint.submitted_by_user_id,
+            type=notification_type,
+            title=title,
+            message=message_template.format(number=complaint.complaint_number),
+            entity_type="complaint",
+            entity_id=complaint.id,
+        )
 
     db.commit()
     return complaint_repository.get_by_id(db, complaint.id)

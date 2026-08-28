@@ -3,8 +3,18 @@ import { useLocation, useParams } from 'react-router-dom';
 import ComplaintStatus from '../../components/complaint/ComplaintStatus';
 import ComplaintTimeline from '../../components/complaint/ComplaintTimeline';
 import EvidenceUploader from '../../components/complaint/EvidenceUploader';
+import ContentContainer from '../../components/layout/ContentContainer';
+import PageHeader from '../../components/layout/PageHeader';
 import LocationMap from '../../components/map/LocationMap';
+import Alert from '../../components/ui/Alert';
+import Badge from '../../components/ui/Badge';
+import Card from '../../components/ui/Card';
+import DetailGrid from '../../components/ui/DetailGrid';
+import ErrorState from '../../components/ui/ErrorState';
+import Skeleton from '../../components/ui/Skeleton';
 import { useAuth } from '../../hooks/useAuth';
+import { formatDateTime } from '../../utils/formatters';
+import { PRIORITIES, configFor } from '../../utils/statusConfig';
 import {
   getComplaint,
   getComplaintTimeline,
@@ -48,74 +58,106 @@ function ComplaintDetails() {
   }
 
   if (error) {
-    return <p className="form-error">{error}</p>;
+    return (
+      <ContentContainer>
+        <ErrorState message={error} />
+      </ContentContainer>
+    );
   }
 
   if (!complaint) {
-    return <p>Loading...</p>;
+    return (
+      <ContentContainer>
+        <Skeleton.List rows={5} />
+      </ContentContainer>
+    );
   }
 
+  const priority = configFor(PRIORITIES, complaint.priority);
+
   return (
-    <section>
-      <div className="page-header">
-        <h1>{complaint.title}</h1>
-        <ComplaintStatus status={complaint.status} />
-      </div>
-      <p className="complaint-number">{complaint.complaint_number}</p>
+    <ContentContainer className="max-w-3xl">
+      <PageHeader
+        title={complaint.title}
+        breadcrumbs={[{ label: 'My complaints', path: '/citizen/complaints' }, { label: complaint.complaint_number }]}
+        actions={<ComplaintStatus status={complaint.status} />}
+      />
 
       {location.state?.evidenceWarning && (
-        <p className="form-error">Some evidence failed to upload: {location.state.evidenceWarning}</p>
+        <Alert tone="warning">Some evidence failed to upload: {location.state.evidenceWarning}</Alert>
       )}
 
-      <dl className="complaint-detail-grid">
-        <dt>Category</dt>
-        <dd>{complaint.category_name}</dd>
-        <dt>Priority</dt>
-        <dd>{complaint.priority}</dd>
-        <dt>District</dt>
-        <dd>{complaint.district_name}</dd>
-        <dt>Reported at</dt>
-        <dd>{new Date(complaint.reported_at).toLocaleString()}</dd>
-        {complaint.address_line && (
-          <>
-            <dt>Location</dt>
-            <dd>{complaint.address_line}</dd>
-          </>
-        )}
-      </dl>
+      <Card>
+        <DetailGrid>
+          <dt>Category</dt>
+          <dd>{complaint.category_name}</dd>
+          <dt>Priority</dt>
+          <dd>
+            <Badge tone={priority.tone}>{priority.label}</Badge>
+          </dd>
+          <dt>District</dt>
+          <dd>{complaint.district_name}</dd>
+          <dt>Reported at</dt>
+          <dd>{formatDateTime(complaint.reported_at)}</dd>
+          {complaint.address_line && (
+            <>
+              <dt>Location</dt>
+              <dd>{complaint.address_line}</dd>
+            </>
+          )}
+        </DetailGrid>
+      </Card>
 
-      <h2>Description</h2>
-      <p>{complaint.description}</p>
+      <Card>
+        <Card.Header>
+          <Card.Title>Description</Card.Title>
+        </Card.Header>
+        <p className="text-sm text-slate-700">{complaint.description}</p>
+      </Card>
 
       {complaint.business && (
-        <>
-          <h2>Business</h2>
-          <p>
+        <Card>
+          <Card.Header>
+            <Card.Title>Business</Card.Title>
+          </Card.Header>
+          <p className="text-sm text-slate-700">
             {complaint.business.business_name} &middot; {complaint.business.address}
           </p>
           {complaint.business.latitude !== null && complaint.business.longitude !== null && (
-            <LocationMap
-              latitude={complaint.business.latitude}
-              longitude={complaint.business.longitude}
-              label={complaint.business.business_name}
-            />
+            <div className="mt-3">
+              <LocationMap
+                latitude={complaint.business.latitude}
+                longitude={complaint.business.longitude}
+                label={complaint.business.business_name}
+              />
+            </div>
           )}
-        </>
+        </Card>
       )}
 
       {complaint.latitude !== null && complaint.longitude !== null && (
-        <>
-          <h2>Location</h2>
+        <Card>
+          <Card.Header>
+            <Card.Title>Location</Card.Title>
+          </Card.Header>
           <LocationMap latitude={complaint.latitude} longitude={complaint.longitude} label={complaint.title} />
-        </>
+        </Card>
       )}
 
-      <h2>Evidence</h2>
-      <EvidenceUploader evidence={evidence} onUpload={handleUpload} />
+      <Card>
+        <Card.Header>
+          <Card.Title>Evidence</Card.Title>
+        </Card.Header>
+        <EvidenceUploader evidence={evidence} onUpload={handleUpload} />
+      </Card>
 
-      <h2>Timeline</h2>
-      <ComplaintTimeline entries={timeline} />
-    </section>
+      <Card>
+        <Card.Header>
+          <Card.Title>Timeline</Card.Title>
+        </Card.Header>
+        <ComplaintTimeline entries={timeline} />
+      </Card>
+    </ContentContainer>
   );
 }
 

@@ -25,7 +25,7 @@ function BoundsWatcher({ onBoundsChange }) {
 
 function ComplaintMap({ markers, center, zoom = 12, onBoundsChange }) {
   return (
-    <div className="map-container">
+    <div className="h-72 w-full overflow-hidden rounded-lg border border-slate-200 sm:h-96 lg:h-120">
       <MapContainer
         center={center || DEFAULT_CENTER}
         zoom={center ? zoom : DEFAULT_ZOOM}

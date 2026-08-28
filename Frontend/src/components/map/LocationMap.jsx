@@ -12,7 +12,7 @@ function LocationMap({ latitude, longitude, label }) {
   }
 
   return (
-    <div className="map-container map-container-compact">
+    <div className="h-48 w-full overflow-hidden rounded-lg border border-slate-200 sm:h-60">
       <MapContainer
         center={[latitude, longitude]}
         zoom={15}

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import ComplaintStatus from '../../components/complaint/ComplaintStatus';
 import { formatStatusLabel } from '../../utils/complaintStatus';
+import { formatDate, formatDateTime } from '../../utils/formatters';
+import { PRIORITIES, configFor } from '../../utils/statusConfig';
 import ComplaintTimeline from '../../components/complaint/ComplaintTimeline';
 import EvidenceUploader from '../../components/complaint/EvidenceUploader';
 import FindingList from '../../components/inspection/FindingList';
@@ -9,6 +11,18 @@ import LocationMap from '../../components/map/LocationMap';
 import ComplaintTriagePanel from '../../components/agent/ComplaintTriagePanel';
 import EvidenceAnalysisPanel from '../../components/agent/EvidenceAnalysisPanel';
 import InvestigationBriefPanel from '../../components/agent/InvestigationBriefPanel';
+import ContentContainer from '../../components/layout/ContentContainer';
+import PageHeader from '../../components/layout/PageHeader';
+import Alert from '../../components/ui/Alert';
+import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
+import Card from '../../components/ui/Card';
+import DetailGrid from '../../components/ui/DetailGrid';
+import ErrorState from '../../components/ui/ErrorState';
+import FormField from '../../components/ui/FormField';
+import Select from '../../components/ui/Select';
+import Skeleton from '../../components/ui/Skeleton';
+import Textarea from '../../components/ui/Textarea';
 import { useAuth } from '../../hooks/useAuth';
 import {
   getComplaintEvidenceAnalysis,
@@ -88,8 +102,8 @@ function ComplaintReview() {
           evidenceData.map((item) =>
             getComplaintEvidenceAnalysis(complaintId, item.id, token)
               .then((result) => [item.id, result])
-              .catch(() => [item.id, null])
-          )
+              .catch(() => [item.id, null]),
+          ),
         );
       })
       .then((entries) => {
@@ -160,123 +174,156 @@ function ComplaintReview() {
   }
 
   if (!complaint) {
-    return error ? <p className="form-error">{error}</p> : <p>Loading...</p>;
+    return (
+      <ContentContainer className="max-w-4xl">
+        {error ? <ErrorState message={error} /> : <Skeleton.List rows={6} />}
+      </ContentContainer>
+    );
   }
 
   const availableTransitions = ALLOWED_TRANSITIONS[complaint.status] || [];
+  const priority = configFor(PRIORITIES, complaint.priority);
 
   return (
-    <section>
-      <div className="page-header">
-        <h1>{complaint.title}</h1>
-        <ComplaintStatus status={complaint.status} />
-      </div>
-      <p className="complaint-number">{complaint.complaint_number}</p>
+    <ContentContainer className="max-w-4xl">
+      <PageHeader
+        title={complaint.title}
+        breadcrumbs={[{ label: 'Complaint queue', path: '/officer/complaints' }, { label: complaint.complaint_number }]}
+        actions={<ComplaintStatus status={complaint.status} />}
+      />
 
-      <dl className="complaint-detail-grid">
-        <dt>Category</dt>
-        <dd>{complaint.category_name}</dd>
-        <dt>Priority</dt>
-        <dd>{complaint.priority}</dd>
-        <dt>Submitted by</dt>
-        <dd>{complaint.submitted_by_name}</dd>
-        <dt>Reported at</dt>
-        <dd>{new Date(complaint.reported_at).toLocaleString()}</dd>
-        {complaint.address_line && (
-          <>
-            <dt>Location</dt>
-            <dd>{complaint.address_line}</dd>
-          </>
-        )}
-      </dl>
+      <Card>
+        <DetailGrid>
+          <dt>Category</dt>
+          <dd>{complaint.category_name}</dd>
+          <dt>Priority</dt>
+          <dd>
+            <Badge tone={priority.tone}>{priority.label}</Badge>
+          </dd>
+          <dt>Submitted by</dt>
+          <dd>{complaint.submitted_by_name}</dd>
+          <dt>Reported at</dt>
+          <dd>{formatDateTime(complaint.reported_at)}</dd>
+          {complaint.address_line && (
+            <>
+              <dt>Location</dt>
+              <dd>{complaint.address_line}</dd>
+            </>
+          )}
+        </DetailGrid>
+      </Card>
 
-      <h2>Description</h2>
-      <p>{complaint.description}</p>
+      <Card>
+        <Card.Header>
+          <Card.Title>Description</Card.Title>
+        </Card.Header>
+        <p className="text-sm text-slate-700">{complaint.description}</p>
+      </Card>
 
       {complaint.business && (
-        <>
-          <h2>Business</h2>
-          <p>
+        <Card>
+          <Card.Header>
+            <Card.Title>Business</Card.Title>
+          </Card.Header>
+          <p className="text-sm text-slate-700">
             {complaint.business.business_name} &middot; {complaint.business.address}
           </p>
           {complaint.business.latitude !== null && complaint.business.longitude !== null && (
-            <LocationMap
-              latitude={complaint.business.latitude}
-              longitude={complaint.business.longitude}
-              label={complaint.business.business_name}
-            />
+            <div className="mt-3">
+              <LocationMap
+                latitude={complaint.business.latitude}
+                longitude={complaint.business.longitude}
+                label={complaint.business.business_name}
+              />
+            </div>
           )}
-        </>
+        </Card>
       )}
 
       {complaint.latitude !== null && complaint.longitude !== null && (
-        <>
-          <h2>Location</h2>
+        <Card>
+          <Card.Header>
+            <Card.Title>Location</Card.Title>
+          </Card.Header>
           <LocationMap latitude={complaint.latitude} longitude={complaint.longitude} label={complaint.title} />
-        </>
+        </Card>
       )}
 
-      <ComplaintTriagePanel
-        triage={triage}
-        isRunning={isTriageRunning}
-        error={triageError}
-        onRun={handleRunTriage}
-      />
+      <ComplaintTriagePanel triage={triage} isRunning={isTriageRunning} error={triageError} onRun={handleRunTriage} />
 
-      <h2>Evidence</h2>
-      <EvidenceUploader
-        evidence={evidence}
-        readOnly
-        renderExtra={(item) => (
-          <EvidenceAnalysisPanel
-            evidenceItem={item}
-            analysis={evidenceAnalyses[item.id]}
-            isRunning={analyzingEvidenceId === item.id}
-            error={evidenceAnalysisErrors[item.id]}
-            onRun={() => handleAnalyzeEvidence(item.id, { force: !!evidenceAnalyses[item.id] })}
-          />
+      <Card>
+        <Card.Header>
+          <Card.Title>Evidence</Card.Title>
+        </Card.Header>
+        <EvidenceUploader
+          evidence={evidence}
+          readOnly
+          renderExtra={(item) => (
+            <div className="mt-3">
+              <EvidenceAnalysisPanel
+                evidenceItem={item}
+                analysis={evidenceAnalyses[item.id]}
+                isRunning={analyzingEvidenceId === item.id}
+                error={evidenceAnalysisErrors[item.id]}
+                onRun={() => handleAnalyzeEvidence(item.id, { force: !!evidenceAnalyses[item.id] })}
+              />
+            </div>
+          )}
+        />
+      </Card>
+
+      <Card>
+        <Card.Header>
+          <Card.Title>Inspection assignment</Card.Title>
+        </Card.Header>
+        {complaint.status === 'verified' && !assignment && (
+          <Link to={`/officer/complaints/${complaintId}/assign`}>
+            <Button variant="secondary" size="sm">
+              Assign an inspector
+            </Button>
+          </Link>
         )}
-      />
-
-      <h2>Inspection assignment</h2>
-      {complaint.status === 'verified' && !assignment && (
-        <p>
-          <Link to={`/officer/complaints/${complaintId}/assign`}>Assign an inspector</Link>
-        </p>
-      )}
-      {assignment && (
-        <dl className="complaint-detail-grid">
-          <dt>Inspector</dt>
-          <dd>{assignment.inspector_name}</dd>
-          <dt>Assignment status</dt>
-          <dd>{formatStatusLabel(assignment.status)}</dd>
-          {assignment.due_at && (
-            <>
-              <dt>Due</dt>
-              <dd>{new Date(assignment.due_at).toLocaleDateString()}</dd>
-            </>
-          )}
-          {assignment.notes && (
-            <>
-              <dt>Notes</dt>
-              <dd>{assignment.notes}</dd>
-            </>
-          )}
-        </dl>
-      )}
+        {assignment && (
+          <DetailGrid>
+            <dt>Inspector</dt>
+            <dd>{assignment.inspector_name}</dd>
+            <dt>Assignment status</dt>
+            <dd>{formatStatusLabel(assignment.status)}</dd>
+            {assignment.due_at && (
+              <>
+                <dt>Due</dt>
+                <dd>{formatDate(assignment.due_at)}</dd>
+              </>
+            )}
+            {assignment.notes && (
+              <>
+                <dt>Notes</dt>
+                <dd>{assignment.notes}</dd>
+              </>
+            )}
+          </DetailGrid>
+        )}
+        {!assignment && complaint.status !== 'verified' && (
+          <p className="text-sm text-slate-500">No inspector assigned yet.</p>
+        )}
+      </Card>
 
       {inspection && (
-        <>
-          <h2>Inspection results</h2>
-          <p>Status: {formatStatusLabel(inspection.inspection_status)}</p>
-          {inspection.summary && <p>{inspection.summary}</p>}
+        <Card>
+          <Card.Header>
+            <Card.Title>Inspection results</Card.Title>
+          </Card.Header>
+          <p className="text-sm text-slate-700">Status: {formatStatusLabel(inspection.inspection_status)}</p>
+          {inspection.summary && <p className="mt-1 text-sm text-slate-700">{inspection.summary}</p>}
           {inspection.action_recommended && (
-            <p>
-              <strong>Recommended action:</strong> {inspection.action_recommended}
+            <p className="mt-1 text-sm text-slate-700">
+              <strong className="font-medium text-slate-900">Recommended action:</strong> {inspection.action_recommended}
             </p>
           )}
-          <FindingList findings={inspection.findings} />
-        </>
+          <div className="mt-3">
+            <FindingList findings={inspection.findings} />
+          </div>
+        </Card>
       )}
 
       <InvestigationBriefPanel
@@ -286,40 +333,42 @@ function ComplaintReview() {
         onRun={handleRunInvestigation}
       />
 
-      <h2>Update status</h2>
-      {availableTransitions.length === 0 ? (
-        <p>No further status updates are available for this complaint in this phase.</p>
-      ) : (
-        <form onSubmit={handleStatusUpdate} className="status-update-form">
-          <label htmlFor="next-status">
-            New status
-            <select id="next-status" value={nextStatus} onChange={(event) => setNextStatus(event.target.value)}>
-              <option value="">Select a status</option>
-              {availableTransitions.map((status) => (
-                <option key={status} value={status}>
-                  {formatStatusLabel(status)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label htmlFor="status-reason">
-            Reason (optional)
-            <textarea id="status-reason" value={reason} onChange={(event) => setReason(event.target.value)} rows={3} />
-          </label>
-          {error && (
-            <p className="form-error" role="alert">
-              {error}
-            </p>
-          )}
-          <button type="submit" disabled={!nextStatus || isSubmitting}>
-            {isSubmitting ? 'Updating...' : 'Update status'}
-          </button>
-        </form>
-      )}
+      <Card>
+        <Card.Header>
+          <Card.Title>Update status</Card.Title>
+        </Card.Header>
+        {availableTransitions.length === 0 ? (
+          <p className="text-sm text-slate-500">No further status updates are available for this complaint in this phase.</p>
+        ) : (
+          <form onSubmit={handleStatusUpdate} className="flex flex-col gap-4">
+            <FormField label="New status" htmlFor="next-status">
+              <Select id="next-status" value={nextStatus} onChange={(event) => setNextStatus(event.target.value)}>
+                <option value="">Select a status</option>
+                {availableTransitions.map((status) => (
+                  <option key={status} value={status}>
+                    {formatStatusLabel(status)}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            <FormField label="Reason" htmlFor="status-reason" hint="Optional">
+              <Textarea id="status-reason" value={reason} onChange={(event) => setReason(event.target.value)} rows={3} />
+            </FormField>
+            {error && <Alert tone="danger">{error}</Alert>}
+            <Button type="submit" disabled={!nextStatus} loading={isSubmitting} className="self-start">
+              {isSubmitting ? 'Updating…' : 'Update status'}
+            </Button>
+          </form>
+        )}
+      </Card>
 
-      <h2>Timeline</h2>
-      <ComplaintTimeline entries={timeline} />
-    </section>
+      <Card>
+        <Card.Header>
+          <Card.Title>Timeline</Card.Title>
+        </Card.Header>
+        <ComplaintTimeline entries={timeline} />
+      </Card>
+    </ContentContainer>
   );
 }
 

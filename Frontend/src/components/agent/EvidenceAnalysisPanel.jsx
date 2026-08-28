@@ -1,3 +1,8 @@
+import { formatDateTime } from '../../utils/formatters';
+import DetailGrid from '../ui/DetailGrid';
+import AiResultPanel, { AiMeta, AiSection, UncertainBanner } from './AiResultPanel';
+import Alert from '../ui/Alert';
+
 // Displays the AI Evidence Analysis Agent's most recent result for a single
 // evidence item and lets an officer/inspector (re-)run it on demand.
 // Everything here is clearly framed as AI-generated and advisory - it never
@@ -5,124 +10,109 @@
 // file or complaint/inspection.
 function EvidenceAnalysisPanel({ evidenceItem, analysis, isRunning, error, onRun }) {
   return (
-    <div className="ai-evidence-analysis-panel">
-      <div className="page-header">
-        <h3>AI Evidence Analysis (Advisory)</h3>
-        <button type="button" onClick={onRun} disabled={isRunning}>
-          {isRunning ? 'Analyzing...' : analysis ? 'Re-analyze' : 'Analyze with AI'}
-        </button>
-      </div>
-
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
+    <AiResultPanel
+      as="div"
+      titleAs="h3"
+      title="AI Evidence Analysis (Advisory)"
+      hasResult={Boolean(analysis)}
+      isRunning={isRunning}
+      error={error}
+      status={analysis?.status}
+      failureMessage={`The last AI analysis attempt failed: ${analysis?.error_message || 'Unknown error.'}`}
+      emptyMessage={`No AI analysis yet for ${evidenceItem?.file_name || 'this item'}. Analyzing extracts visible text, product details, and observations for your review - it never changes the evidence file.`}
+      onRun={onRun}
+      runLabel="Analyze with AI"
+      rerunLabel="Re-analyze"
+      runningLabel="Analyzing…"
+    >
+      {analysis?.is_uncertain && (
+        <UncertainBanner>
+          AI confidence is low or some details were hard to read. Treat this analysis with caution and review the
+          evidence yourself.
+        </UncertainBanner>
       )}
 
-      {!analysis && !error && !isRunning && (
-        <p className="ai-evidence-empty">
-          No AI analysis yet for {evidenceItem?.file_name || 'this item'}. Analyzing extracts visible text, product
-          details, and observations for your review - it never changes the evidence file.
-        </p>
+      {analysis?.possible_expired === true && (
+        <Alert tone="warning">
+          Possible expired product based on visible date &mdash; for officer/inspector review only. This is not a
+          confirmed finding.
+        </Alert>
       )}
 
-      {analysis && analysis.status === 'failed' && (
-        <p className="form-error" role="alert">
-          The last AI analysis attempt failed: {analysis.error_message || 'Unknown error.'}
-        </p>
+      {analysis?.extracted_text && (
+        <AiSection title="Extracted text (OCR)">
+          <p className="whitespace-pre-wrap rounded-md bg-white p-2 text-sm">{analysis.extracted_text}</p>
+        </AiSection>
       )}
 
-      {analysis && analysis.status === 'completed' && (
-        <>
-          {analysis.is_uncertain && (
-            <p className="ai-evidence-uncertain-banner" role="alert">
-              AI confidence is low or some details were hard to read. Treat this analysis with caution and review the
-              evidence yourself.
-            </p>
-          )}
+      {analysis &&
+        (analysis.product_name ||
+          analysis.manufacturer ||
+          analysis.batch_lot_number ||
+          analysis.manufacturing_date_text ||
+          analysis.expiry_date_text) && (
+          <DetailGrid>
+            {analysis.product_name && (
+              <>
+                <dt>Product</dt>
+                <dd>{analysis.product_name}</dd>
+              </>
+            )}
+            {analysis.manufacturer && (
+              <>
+                <dt>Manufacturer</dt>
+                <dd>{analysis.manufacturer}</dd>
+              </>
+            )}
+            {analysis.batch_lot_number && (
+              <>
+                <dt>Batch / lot</dt>
+                <dd>{analysis.batch_lot_number}</dd>
+              </>
+            )}
+            {analysis.manufacturing_date_text && (
+              <>
+                <dt>Manufacturing date (as printed)</dt>
+                <dd>{analysis.manufacturing_date_text}</dd>
+              </>
+            )}
+            {analysis.expiry_date_text && (
+              <>
+                <dt>Expiry / best-before (as printed)</dt>
+                <dd>{analysis.expiry_date_text}</dd>
+              </>
+            )}
+          </DetailGrid>
+        )}
 
-          {analysis.possible_expired === true && (
-            <p className="ai-evidence-expiry-banner" role="alert">
-              Possible expired product based on visible date &mdash; for officer/inspector review only. This is not
-              a confirmed finding.
-            </p>
-          )}
-
-          {analysis.extracted_text && (
-            <>
-              <h4>Extracted text (OCR)</h4>
-              <p className="ai-evidence-extracted-text">{analysis.extracted_text}</p>
-            </>
-          )}
-
-          {(analysis.product_name ||
-            analysis.manufacturer ||
-            analysis.batch_lot_number ||
-            analysis.manufacturing_date_text ||
-            analysis.expiry_date_text) && (
-            <dl className="complaint-detail-grid">
-              {analysis.product_name && (
-                <>
-                  <dt>Product</dt>
-                  <dd>{analysis.product_name}</dd>
-                </>
-              )}
-              {analysis.manufacturer && (
-                <>
-                  <dt>Manufacturer</dt>
-                  <dd>{analysis.manufacturer}</dd>
-                </>
-              )}
-              {analysis.batch_lot_number && (
-                <>
-                  <dt>Batch / lot</dt>
-                  <dd>{analysis.batch_lot_number}</dd>
-                </>
-              )}
-              {analysis.manufacturing_date_text && (
-                <>
-                  <dt>Manufacturing date (as printed)</dt>
-                  <dd>{analysis.manufacturing_date_text}</dd>
-                </>
-              )}
-              {analysis.expiry_date_text && (
-                <>
-                  <dt>Expiry / best-before (as printed)</dt>
-                  <dd>{analysis.expiry_date_text}</dd>
-                </>
-              )}
-            </dl>
-          )}
-
-          {analysis.packaging_observations && (
-            <>
-              <h4>Packaging / label observations</h4>
-              <p>{analysis.packaging_observations}</p>
-            </>
-          )}
-
-          {analysis.hygiene_observations && (
-            <>
-              <h4>Hygiene / food condition observations</h4>
-              <p>{analysis.hygiene_observations}</p>
-            </>
-          )}
-
-          {analysis.foreign_object_observations && (
-            <>
-              <h4>Possible foreign object observations</h4>
-              <p>{analysis.foreign_object_observations}</p>
-            </>
-          )}
-
-          <p className="ai-evidence-meta">
-            Generated by {analysis.model_used} on {new Date(analysis.created_at).toLocaleString()} &middot;
-            confidence {analysis.confidence !== null ? `${Math.round(analysis.confidence * 100)}%` : 'unknown'}. This
-            is an AI observation only, not a confirmed finding.
-          </p>
-        </>
+      {analysis?.packaging_observations && (
+        <AiSection title="Packaging / label observations">
+          <p>{analysis.packaging_observations}</p>
+        </AiSection>
       )}
-    </div>
+
+      {analysis?.hygiene_observations && (
+        <AiSection title="Hygiene / food condition observations">
+          <p>{analysis.hygiene_observations}</p>
+        </AiSection>
+      )}
+
+      {analysis?.foreign_object_observations && (
+        <AiSection title="Possible foreign object observations">
+          <p>{analysis.foreign_object_observations}</p>
+        </AiSection>
+      )}
+
+      {analysis && (
+        <AiMeta>
+          Generated by {analysis.model_used} on {formatDateTime(analysis.created_at)} &middot; confidence{' '}
+          {analysis.confidence !== null && analysis.confidence !== undefined
+            ? `${Math.round(analysis.confidence * 100)}%`
+            : 'unknown'}
+          . This is an AI observation only, not a confirmed finding.
+        </AiMeta>
+      )}
+    </AiResultPanel>
   );
 }
 

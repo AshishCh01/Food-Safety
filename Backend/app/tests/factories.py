@@ -12,6 +12,7 @@ from app.models.district import District
 from app.models.division import Division
 from app.models.evidence import Evidence
 from app.models.inspection import Inspection
+from app.models.inspection_finding import InspectionFinding
 from app.models.rag_document import RagDocument
 from app.models.rag_document_chunk import RagDocumentChunk
 from app.models.staff_profile import StaffProfile
@@ -20,6 +21,7 @@ from app.utils.enums import (
     AssignmentStatus,
     ComplaintPriority,
     ComplaintStatus,
+    FindingSeverity,
     InspectionStatus,
     RagDocumentStatus,
     RagDocumentType,
@@ -326,3 +328,25 @@ def create_inspection(
     db.commit()
     db.refresh(inspection)
     return inspection
+
+
+def create_inspection_finding(
+    db: Session,
+    inspection: Inspection,
+    *,
+    check_code: str = "HYG-01",
+    finding: str = "Storage area inspected.",
+    severity: FindingSeverity = FindingSeverity.LOW,
+    compliant: bool = True,
+) -> InspectionFinding:
+    record = InspectionFinding(
+        inspection_id=inspection.id,
+        check_code=check_code,
+        finding=finding,
+        severity=severity,
+        compliant=compliant,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return record

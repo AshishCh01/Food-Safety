@@ -5,6 +5,9 @@ import { useAuth } from '../../hooks/useAuth';
 import { apiRequest } from '../../services/api';
 import { listComplaintCategories, listDistricts } from '../../services/complaintService';
 import { getComplaintsMap } from '../../services/mapService';
+import ContentContainer from '../../components/layout/ContentContainer';
+import PageHeader from '../../components/layout/PageHeader';
+import ErrorState from '../../components/ui/ErrorState';
 
 const INITIAL_FILTERS = { status: '', priority: '', categoryId: '', dateFrom: '', dateTo: '' };
 
@@ -48,18 +51,20 @@ function ComplaintMapPage() {
   }, [getAccessToken, bounds, filters]);
 
   return (
-    <section>
-      <h1>Complaint Map</h1>
-      <p>Complaints in your district plotted by reported location. Colors indicate priority.</p>
+    <ContentContainer className="max-w-none">
+      <PageHeader
+        title="Complaint Map"
+        description="Complaints in your district plotted by reported location. Colors indicate priority."
+      />
 
       <MapFilters categories={categories} value={filters} onChange={setFilters} />
 
-      {error && <p className="form-error">{error}</p>}
+      {error && <ErrorState message={error} />}
 
       <ComplaintMap markers={markers} center={center} onBoundsChange={setBounds} />
 
-      <p className="map-marker-count">{markers.length} complaint(s) shown on the current map view.</p>
-    </section>
+      <p className="text-sm text-slate-500">{markers.length} complaint(s) shown on the current map view.</p>
+    </ContentContainer>
   );
 }
 

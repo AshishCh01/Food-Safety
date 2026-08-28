@@ -17,7 +17,11 @@ class AuditLog(Base):
     """
 
     __tablename__ = "audit_logs"
-    __table_args__ = (Index("ix_audit_logs_entity", "entity_type", "entity_id"),)
+    __table_args__ = (
+        Index("ix_audit_logs_entity", "entity_type", "entity_id"),
+        Index("ix_audit_logs_actor", "actor_user_id"),
+        Index("ix_audit_logs_created_at", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     actor_user_id: Mapped[uuid.UUID] = mapped_column(

@@ -1,6 +1,12 @@
 import { useState } from 'react';
-
-const SEVERITIES = ['low', 'medium', 'high', 'critical'];
+import { FINDING_SEVERITIES } from '../../utils/statusConfig';
+import Button from '../ui/Button';
+import Card from '../ui/Card';
+import Checkbox from '../ui/Checkbox';
+import FormField from '../ui/FormField';
+import Input from '../ui/Input';
+import Select from '../ui/Select';
+import Textarea from '../ui/Textarea';
 
 const INITIAL_FORM = {
   checkCode: '',
@@ -25,51 +31,45 @@ function FindingForm({ onSubmit, isSubmitting }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="status-update-form">
-      <label htmlFor="finding-check-code">
-        Check code
-        <input id="finding-check-code" value={form.checkCode} onChange={updateField('checkCode')} required />
-      </label>
-      <label htmlFor="finding-text">
-        Finding
-        <textarea id="finding-text" value={form.finding} onChange={updateField('finding')} rows={3} required />
-      </label>
-      <label htmlFor="finding-severity">
-        Severity
-        <select id="finding-severity" value={form.severity} onChange={updateField('severity')}>
-          {SEVERITIES.map((severity) => (
-            <option key={severity} value={severity}>
-              {severity}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="checkbox-label" htmlFor="finding-compliant">
-        <input
-          id="finding-compliant"
-          type="checkbox"
-          checked={form.compliant}
-          onChange={(event) => setForm((prev) => ({ ...prev, compliant: event.target.checked }))}
-        />
-        Compliant
-      </label>
-      <label htmlFor="finding-notes">
-        Notes (optional)
-        <textarea id="finding-notes" value={form.notes} onChange={updateField('notes')} rows={2} />
-      </label>
-      <label htmlFor="finding-corrective-action">
-        Corrective action (optional)
-        <textarea
+    <Card as="form" onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <FormField label="Check code" htmlFor="finding-check-code" required>
+          <Input id="finding-check-code" value={form.checkCode} onChange={updateField('checkCode')} required />
+        </FormField>
+        <FormField label="Severity" htmlFor="finding-severity">
+          <Select id="finding-severity" value={form.severity} onChange={updateField('severity')}>
+            {FINDING_SEVERITIES.map((severity) => (
+              <option key={severity.value} value={severity.value}>
+                {severity.label}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+      </div>
+      <FormField label="Finding" htmlFor="finding-text" required>
+        <Textarea id="finding-text" value={form.finding} onChange={updateField('finding')} rows={3} required />
+      </FormField>
+      <Checkbox
+        id="finding-compliant"
+        label="Compliant"
+        checked={form.compliant}
+        onChange={(event) => setForm((prev) => ({ ...prev, compliant: event.target.checked }))}
+      />
+      <FormField label="Notes" htmlFor="finding-notes" hint="Optional">
+        <Textarea id="finding-notes" value={form.notes} onChange={updateField('notes')} rows={2} />
+      </FormField>
+      <FormField label="Corrective action" htmlFor="finding-corrective-action" hint="Optional">
+        <Textarea
           id="finding-corrective-action"
           value={form.correctiveAction}
           onChange={updateField('correctiveAction')}
           rows={2}
         />
-      </label>
-      <button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? 'Adding...' : 'Add finding'}
-      </button>
-    </form>
+      </FormField>
+      <Button type="submit" loading={isSubmitting} className="self-start">
+        {isSubmitting ? 'Adding…' : 'Add finding'}
+      </Button>
+    </Card>
   );
 }
 

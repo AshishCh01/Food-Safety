@@ -267,3 +267,10 @@ class InvestigationNotFoundError(NotFoundError):
 
     def __init__(self, message: str = "No AI investigation brief exists for this complaint yet.") -> None:
         super().__init__(message)
+
+
+class NotificationNotFoundError(NotFoundError):
+    code = "NOTIFICATION_NOT_FOUND"
+
+    def __init__(self, message: str = "Notification was not found.") -> None:
+        super().__init__(message)

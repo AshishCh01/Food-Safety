@@ -1,5 +1,14 @@
 import { useEffect, useState } from 'react';
 import ComplaintCard from '../../components/complaint/ComplaintCard';
+import ContentContainer from '../../components/layout/ContentContainer';
+import PageHeader from '../../components/layout/PageHeader';
+import EmptyState from '../../components/ui/EmptyState';
+import ErrorState from '../../components/ui/ErrorState';
+import FormField from '../../components/ui/FormField';
+import Pagination from '../../components/ui/Pagination';
+import Select from '../../components/ui/Select';
+import Skeleton from '../../components/ui/Skeleton';
+import { COMPLAINT_STATUSES, PRIORITIES } from '../../utils/statusConfig';
 import { useAuth } from '../../hooks/useAuth';
 import { listDistrictComplaints } from '../../services/complaintService';
 
@@ -25,16 +34,13 @@ function ComplaintQueue() {
       .catch((err) => setError(err.message));
   }, [getAccessToken, status, priority, page]);
 
-  const totalPages = result ? Math.max(1, Math.ceil(result.total / PAGE_SIZE)) : 1;
-
   return (
-    <section>
-      <h1>District Complaint Queue</h1>
+    <ContentContainer>
+      <PageHeader title="District Complaint Queue" />
 
-      <div className="filter-row">
-        <label htmlFor="status-filter">
-          Status
-          <select
+      <div className="flex flex-wrap gap-3">
+        <FormField label="Status" htmlFor="status-filter" className="w-44">
+          <Select
             id="status-filter"
             value={status}
             onChange={(event) => {
@@ -43,17 +49,16 @@ function ComplaintQueue() {
             }}
           >
             <option value="">All</option>
-            <option value="submitted">Submitted</option>
-            <option value="under_review">Under review</option>
-            <option value="needs_information">Needs information</option>
-            <option value="verified">Verified</option>
-            <option value="rejected">Rejected</option>
-          </select>
-        </label>
+            {COMPLAINT_STATUSES.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </Select>
+        </FormField>
 
-        <label htmlFor="priority-filter">
-          Priority
-          <select
+        <FormField label="Priority" htmlFor="priority-filter" className="w-44">
+          <Select
             id="priority-filter"
             value={priority}
             onChange={(event) => {
@@ -62,38 +67,29 @@ function ComplaintQueue() {
             }}
           >
             <option value="">All</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="critical">Critical</option>
-          </select>
-        </label>
+            {PRIORITIES.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+          </Select>
+        </FormField>
       </div>
 
-      {error && <p className="form-error">{error}</p>}
+      {error && <ErrorState message={error} />}
 
-      {result && result.items.length === 0 && <p>No complaints in the queue.</p>}
+      {!result && !error && <Skeleton.List rows={5} />}
 
-      <div className="complaint-list">
+      {result && result.items.length === 0 && <EmptyState title="No complaints in the queue." />}
+
+      <div className="flex flex-col gap-3">
         {result?.items.map((complaint) => (
           <ComplaintCard key={complaint.id} complaint={complaint} linkTo={`/officer/complaints/${complaint.id}`} />
         ))}
       </div>
 
-      {result && result.total > PAGE_SIZE && (
-        <div className="pagination">
-          <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-            Previous
-          </button>
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <button type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-            Next
-          </button>
-        </div>
-      )}
-    </section>
+      {result && <Pagination page={page} pageSize={PAGE_SIZE} total={result.total} onPageChange={setPage} />}
+    </ContentContainer>
   );
 }
 

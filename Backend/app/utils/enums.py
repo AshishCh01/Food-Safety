@@ -113,3 +113,13 @@ class RagDocumentStatus(str, enum.Enum):
 class AssistantMessageRole(str, enum.Enum):
     USER = "user"
     ASSISTANT = "assistant"
+
+
+class NotificationType(str, enum.Enum):
+    COMPLAINT_SUBMITTED = "complaint_submitted"
+    COMPLAINT_VERIFIED = "complaint_verified"
+    COMPLAINT_REJECTED = "complaint_rejected"
+    INSPECTOR_ASSIGNED = "inspector_assigned"
+    INSPECTION_SCHEDULED = "inspection_scheduled"
+    INSPECTION_COMPLETED = "inspection_completed"
+    COMPLAINT_RESOLVED = "complaint_resolved"

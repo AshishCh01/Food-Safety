@@ -190,6 +190,7 @@ Food Safety/
 │   │       ├── 09b78bb3d711_add_evidence_analysis_results.py
 │   │       ├── 7c3f1a9d2e4b_add_rag_and_assistant_tables.py
 │   │       ├── 4d8e6a1c9b2f_add_investigation_briefs.py
+│   │       ├── 8f1a2c6d4b3e_add_notifications_and_audit_log_indexes.py
 │   │       └── ...
 │   │
 │   └── app/
@@ -222,6 +223,7 @@ Food Safety/
 │       │   ├── inspection.py
 │       │   ├── inspection_finding.py
 │       │   ├── investigation_brief.py # Phase 9 advisory result, see DATABASE_SCHEMA.md sec 20
+│       │   ├── notification.py        # Phase 10, see DATABASE_SCHEMA.md sec 19
 │       │   ├── rag_document.py
 │       │   ├── rag_document_chunk.py
 │       │   ├── assistant_conversation.py
@@ -242,6 +244,9 @@ Food Safety/
 │       │   ├── assignment.py
 │       │   ├── agent.py           # ComplaintTriageRead, EvidenceAnalysisRead, InvestigationBriefRead, Assistant*
 │       │   ├── rag.py
+│       │   ├── notification.py    # Phase 10
+│       │   ├── analytics.py       # Phase 10
+│       │   ├── audit_log.py       # Phase 10
 │       │   └── common.py
 │       │
 │       ├── api/
@@ -251,9 +256,10 @@ Food Safety/
 │       │   ├── reference.py
 │       │   ├── auth/
 │       │   ├── citizen/
-│       │   ├── officer/           # includes /triage, /evidence/{id}/analysis, /investigation endpoints
+│       │   ├── officer/           # includes /triage, /evidence/{id}/analysis, /investigation, /analytics endpoints
 │       │   ├── inspector/         # includes /evidence/{id}/analysis and /assistant endpoints
-│       │   └── admin/             # includes /rag/documents endpoints
+│       │   ├── admin/             # includes /rag/documents, /analytics, /audit-logs endpoints
+│       │   └── notifications.py   # Phase 10 - shared across all roles, scoped to current_user.id
 │       │
 │       ├── services/
 │       │   ├── auth_service.py
@@ -269,7 +275,10 @@ Food Safety/
 │       │   ├── storage_service.py     # Supabase Storage: upload/download/signed URLs
 │       │   ├── ai_service.py          # centralized Gemini text/structured/multimodal wrapper
 │       │   ├── rag_document_service.py
-│       │   └── assistant_service.py
+│       │   ├── assistant_service.py
+│       │   ├── notification_service.py  # Phase 10 - read/mark-read for a user's own inbox
+│       │   ├── analytics_service.py     # Phase 10 - district/statewide KPI aggregation
+│       │   └── audit_log_service.py     # Phase 10 - read-only admin audit-log listing
 │       │
 │       ├── repositories/
 │       │   ├── user_repository.py
@@ -291,7 +300,9 @@ Food Safety/
 │       │   ├── rag_document_repository.py
 │       │   ├── rag_chunk_repository.py
 │       │   ├── assistant_repository.py
-│       │   └── audit_log_repository.py
+│       │   ├── audit_log_repository.py    # Phase 10 adds list_logs(); record() is still the only writer
+│       │   ├── notification_repository.py # Phase 10 - flush-only create(), mirrors audit_log_repository.record
+│       │   └── analytics_repository.py    # Phase 10 - aggregation queries, no ORM model of its own
 │       │
 │       ├── agents/
 │       │   ├── complaint_triage/
@@ -383,8 +394,14 @@ yet:
   for Inspector Assistant conversation state, and `investigation_briefs`
   (`app/models/investigation_brief.py`) for the Investigation Agent's
   advisory result (Phase 9, single-shot and cacheable like
-  `evidence_analysis_results`, not a conversation). A `notifications` model
-  still does not exist yet (Phase 10+).
+  `evidence_analysis_results`, not a conversation). Phase 10 adds
+  `notifications` (`app/models/notification.py`) - unlike the AI advisory
+  result tables above, this is written directly by the domain services
+  (`complaint_service`, `assignment_service`) that trigger each workflow
+  event, not by an agent. Phase 10 does not add any new persistent table for
+  analytics or the audit trail - `analytics_repository` aggregates the
+  existing operational tables on read, and `audit_logs` (already created in
+  Phase 4) only gained two extra indexes and a `list_logs()` reader.
 - On the frontend, the actual AI-facing components are
   `frontend/src/components/agent/ComplaintTriagePanel.jsx`,
   `EvidenceAnalysisPanel.jsx`, `AssistantChat.jsx`, and
@@ -394,9 +411,52 @@ yet:
   page; it renders inline on `pages/officer/ComplaintReview.jsx` alongside
   the triage/evidence panels, since it is scoped to one complaint being
   reviewed rather than a standalone workflow.
+- Phase 10 adds `frontend/src/pages/shared/Notifications.jsx` - a role-
+  agnostic inbox page (not under `pages/citizen|officer|inspector|admin/`,
+  since every role has one) - and `frontend/src/pages/admin/AuditLogs.jsx`,
+  plus `services/notificationService.js`, `services/analyticsService.js`,
+  and `services/auditLogService.js`. District/statewide KPIs render inline
+  on the existing `OfficerDashboard.jsx`/`AdminDashboard.jsx`.
+- **Phase 11** rebuilt the frontend on Tailwind CSS v4 (the `@tailwindcss/vite`
+  plugin, added to `frontend/vite.config.js`; design tokens - `brand`/
+  `accent`/`priority` colors - live in a `@theme` block in
+  `frontend/src/index.css`, replacing the old hand-written `App.css`/
+  `index.css`). A real design system now lives at `frontend/src/components/
+  ui/` (`Button`, `IconButton`, `Input`, `Select`, `Textarea`, `Checkbox`,
+  `FormField`, `Card`, `Badge`, `Table`, `Alert`, `Modal`, `Drawer`, `Tabs`,
+  `Breadcrumbs`, `Pagination`, `Tooltip`, `Skeleton`, `EmptyState`,
+  `ErrorState`, `ConfirmDialog`, `Spinner`, `StatTile`, `DetailGrid`,
+  `DetailsList` - `Modal`/`Drawer` are built on the native `<dialog>` element
+  rather than a dialog library) instead of the aspirational
+  `components/common/` shown above, plus `frontend/src/components/charts/`
+  (`CategoryBarChart`, `TrendLineChart`, `WorkloadBarChart` - thin Recharts
+  wrappers, the one new runtime dependency this phase added alongside `clsx`
+  and `lucide-react`) replacing the aspirational `components/dashboard/
+  *Chart.jsx` files. `frontend/src/components/layout/` gained `AppShell.jsx`
+  (persistent sidebar + topbar for every authenticated route, collapsing into
+  a `Drawer` on mobile), `Sidebar.jsx`, `Topbar.jsx`, `PublicLayout.jsx` (the
+  lighter header/footer chrome for `/`, `/login`, `/register`),
+  `PageHeader.jsx`, and `ContentContainer.jsx`, alongside the existing
+  `Navbar.jsx`/`Footer.jsx`. `frontend/src/routes/AppRoutes.jsx` now nests
+  routes under these two layouts as React Router layout routes;
+  `ProtectedRoute.jsx`/`RoleRoute.jsx` themselves were not changed. New
+  `frontend/src/utils/statusConfig.js` (canonical status/priority/role/etc.
+  value-label-tone tables, superseding the inline lists that used to be
+  duplicated per page) and `utils/formatters.js` (date/number formatting via
+  native `Intl`) were added; `utils/complaintStatus.js` and
+  `utils/permissions.js` were kept and extended rather than replaced.
+  Three admin pages that had backend endpoints but no UI before this phase
+  were built: `pages/admin/StaffManagement.jsx`, `pages/admin/
+  Businesses.jsx` (read-only - there is no business create/edit endpoint,
+  businesses are created only through citizen complaint submission), and
+  `pages/admin/RagDocuments.jsx`, backed by three new services
+  (`services/staffService.js`, `services/businessService.js`,
+  `services/ragDocumentService.js`). `pages/public/NotFound.jsx` was added
+  for the `*` route. No backend files, API contracts, or database schema
+  changed in this phase.
 
 Update this note (or remove it once the tree is fully current again) the
-next time a phase changes backend structure.
+next time a phase changes backend or frontend structure.
 
 ---
 

@@ -1,18 +1,7 @@
-const STATUSES = [
-  'submitted',
-  'under_review',
-  'needs_information',
-  'verified',
-  'rejected',
-  'assigned',
-  'inspection_scheduled',
-  'under_inspection',
-  'inspection_completed',
-  'action_in_progress',
-  'resolved',
-  'closed',
-];
-const PRIORITIES = ['low', 'medium', 'high', 'critical'];
+import { COMPLAINT_STATUSES, PRIORITIES } from '../../utils/statusConfig';
+import FormField from '../ui/FormField';
+import Input from '../ui/Input';
+import Select from '../ui/Select';
 
 function MapFilters({ categories, value, onChange }) {
   function update(field) {
@@ -20,52 +9,47 @@ function MapFilters({ categories, value, onChange }) {
   }
 
   return (
-    <div className="filter-row map-filters">
-      <label htmlFor="map-status-filter">
-        Status
-        <select id="map-status-filter" value={value.status} onChange={update('status')}>
+    <div className="flex flex-wrap items-end gap-3">
+      <FormField label="Status" htmlFor="map-status-filter">
+        <Select id="map-status-filter" value={value.status} onChange={update('status')}>
           <option value="">All</option>
-          {STATUSES.map((status) => (
-            <option key={status} value={status}>
-              {status.replaceAll('_', ' ')}
+          {COMPLAINT_STATUSES.map((status) => (
+            <option key={status.value} value={status.value}>
+              {status.label}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </FormField>
 
-      <label htmlFor="map-priority-filter">
-        Priority
-        <select id="map-priority-filter" value={value.priority} onChange={update('priority')}>
+      <FormField label="Priority" htmlFor="map-priority-filter">
+        <Select id="map-priority-filter" value={value.priority} onChange={update('priority')}>
           <option value="">All</option>
           {PRIORITIES.map((priority) => (
-            <option key={priority} value={priority}>
-              {priority}
+            <option key={priority.value} value={priority.value}>
+              {priority.label}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </FormField>
 
-      <label htmlFor="map-category-filter">
-        Category
-        <select id="map-category-filter" value={value.categoryId} onChange={update('categoryId')}>
+      <FormField label="Category" htmlFor="map-category-filter">
+        <Select id="map-category-filter" value={value.categoryId} onChange={update('categoryId')}>
           <option value="">All</option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
               {category.name}
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </FormField>
 
-      <label htmlFor="map-date-from-filter">
-        From
-        <input id="map-date-from-filter" type="date" value={value.dateFrom} onChange={update('dateFrom')} />
-      </label>
+      <FormField label="From" htmlFor="map-date-from-filter">
+        <Input id="map-date-from-filter" type="date" value={value.dateFrom} onChange={update('dateFrom')} />
+      </FormField>
 
-      <label htmlFor="map-date-to-filter">
-        To
-        <input id="map-date-to-filter" type="date" value={value.dateTo} onChange={update('dateTo')} />
-      </label>
+      <FormField label="To" htmlFor="map-date-to-filter">
+        <Input id="map-date-to-filter" type="date" value={value.dateTo} onChange={update('dateTo')} />
+      </FormField>
     </div>
   );
 }

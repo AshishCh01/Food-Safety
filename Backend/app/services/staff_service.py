@@ -1,14 +1,16 @@
+import uuid
+
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
 from app.models.staff_profile import StaffProfile
-from app.repositories import district_repository, staff_repository, user_repository
+from app.repositories import audit_log_repository, district_repository, staff_repository, user_repository
 from app.schemas.staff import StaffCreateRequest, StaffRead
 from app.utils.enums import UserRole
 from app.utils.exceptions import ConflictError, NotFoundError, UserAlreadyExistsError
 
 
-def create_staff(db: Session, payload: StaffCreateRequest) -> StaffProfile:
+def create_staff(db: Session, payload: StaffCreateRequest, *, actor_user_id: uuid.UUID | None = None) -> StaffProfile:
     district = district_repository.get_by_id(db, payload.district_id)
     if district is None:
         raise NotFoundError("District was not found.")
@@ -33,7 +35,7 @@ def create_staff(db: Session, payload: StaffCreateRequest) -> StaffProfile:
         role=payload.role,
     )
 
-    return staff_repository.create(
+    profile = staff_repository.create(
         db,
         user_id=user.id,
         district_id=payload.district_id,
@@ -41,6 +43,25 @@ def create_staff(db: Session, payload: StaffCreateRequest) -> StaffProfile:
         employee_code=payload.employee_code,
         designation=payload.designation,
     )
+
+    # actor_user_id is optional to allow the development seed scripts
+    # (scripts/seed_staff.py) to create staff without an authenticated admin
+    # in the loop; the real /admin/staff API always supplies it.
+    if actor_user_id is not None:
+        audit_log_repository.record(
+            db,
+            actor_user_id=actor_user_id,
+            action="staff_account_created",
+            entity_type="staff_profile",
+            entity_id=profile.id,
+            details={
+                "role": payload.role.value,
+                "district_id": str(payload.district_id),
+                "employee_code": payload.employee_code,
+            },
+        )
+        db.commit()
+    return profile
 
 
 def to_staff_read(profile: StaffProfile) -> StaffRead:

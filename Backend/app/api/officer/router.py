@@ -12,6 +12,7 @@ from app.core.dependencies import get_current_staff_profile, require_district_of
 from app.models.staff_profile import StaffProfile
 from app.repositories import complaint_status_history_repository, staff_repository
 from app.schemas.agent import ComplaintTriageRead, EvidenceAnalysisRead, InvestigationBriefRead
+from app.schemas.analytics import DistrictAnalytics
 from app.schemas.assignment import AssignmentCreateRequest, AssignmentRead
 from app.schemas.complaint import (
     ComplaintMapData,
@@ -25,6 +26,7 @@ from app.schemas.evidence import EvidenceRead
 from app.schemas.inspection import InspectionRead
 from app.schemas.staff import StaffRead
 from app.services import (
+    analytics_service,
     assignment_service,
     complaint_service,
     evidence_service,
@@ -127,6 +129,33 @@ def get_complaints_map(
         items=[complaint_service.to_map_marker(item) for item in markers],
         total=len(markers),
     )
+
+
+@router.get("/analytics", response_model=DistrictAnalytics)
+def get_officer_analytics(
+    trend_days: int = Query(default=30, ge=1, le=180),
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> DistrictAnalytics:
+    """District-scoped operational KPIs (docs/PROJECT_SPEC.md section 19).
+    District scope always comes from the authenticated officer's own staff
+    profile, never from a client-supplied parameter."""
+    return analytics_service.get_district_analytics(
+        db, staff.district_id, staff.district.name, trend_days=trend_days
+    )
+
+
+@router.get("/businesses/{business_id}/complaints", response_model=list[ComplaintSummary])
+def get_business_complaint_history(
+    business_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> list[ComplaintSummary]:
+    """Prior complaints against a business, scoped to the officer's own
+    district (docs/DEVELOPMENT_ROADMAP.md Phase 10 "business complaint-history
+    views")."""
+    complaints = complaint_service.list_business_history_for_district(db, staff.district_id, business_id)
+    return [complaint_service.to_complaint_summary(item) for item in complaints]
 
 
 @router.get("/complaints/nearby", response_model=list[ComplaintSummary])

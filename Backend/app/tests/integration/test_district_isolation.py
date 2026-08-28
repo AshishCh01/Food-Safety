@@ -1,7 +1,16 @@
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.tests.factories import auth_headers, create_district, create_division, create_staff
+from app.tests.factories import (
+    auth_headers,
+    create_business,
+    create_complaint,
+    create_complaint_category,
+    create_district,
+    create_division,
+    create_staff,
+    create_user,
+)
 from app.utils.enums import UserRole
 
 
@@ -73,6 +82,33 @@ def test_inspector_dashboard_reports_own_district(client: TestClient, db_session
 
     assert response.status_code == 200
     assert response.json()["district_code"] == "NGP"
+
+
+def test_business_complaint_history_is_scoped_to_own_district(client: TestClient, db_session: Session) -> None:
+    """A business chain operating in multiple districts must not leak one
+    district's complaint history into another district's officer view."""
+    pune, nagpur, pune_officer, pune_inspector, nagpur_officer, nagpur_inspector = _setup_two_districts(db_session)
+    category = create_complaint_category(db_session)
+    citizen = create_user(db_session, email="citizen-history@example.com")
+
+    pune_business = create_business(db_session, pune, business_name="Chain Store")
+    nagpur_business = create_business(db_session, nagpur, business_name="Chain Store")
+    create_complaint(db_session, citizen, pune, category, business=pune_business, complaint_number="MH-PUN-2026-000002")
+    create_complaint(
+        db_session, citizen, nagpur, category, business=nagpur_business, complaint_number="MH-NGP-2026-000002"
+    )
+
+    response = client.get(
+        f"/api/v1/officer/businesses/{pune_business.id}/complaints", headers=auth_headers(pune_officer)
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+    cross_district_response = client.get(
+        f"/api/v1/officer/businesses/{nagpur_business.id}/complaints", headers=auth_headers(pune_officer)
+    )
+    assert cross_district_response.json() == []
 
 
 def test_forged_token_district_claim_does_not_grant_access(client: TestClient, db_session: Session) -> None:

@@ -92,6 +92,28 @@ def test_unauthenticated_request_is_rejected(client: TestClient) -> None:
     assert response.status_code == 401
 
 
+def test_citizen_cannot_access_officer_analytics(client: TestClient, db_session: Session) -> None:
+    citizen = create_user(db_session, email="citizen-analytics@example.com", role=UserRole.CITIZEN)
+
+    response = client.get("/api/v1/officer/analytics", headers=auth_headers(citizen))
+
+    assert response.status_code == 403
+
+
+def test_officer_cannot_access_admin_analytics_or_audit_logs(client: TestClient, db_session: Session) -> None:
+    division = create_division(db_session)
+    district = create_district(db_session, division)
+    officer_user, _ = create_staff(
+        db_session, district, role=UserRole.DISTRICT_OFFICER, email="officer-audit@example.com", employee_code="DO-5"
+    )
+
+    analytics_response = client.get("/api/v1/admin/analytics", headers=auth_headers(officer_user))
+    audit_response = client.get("/api/v1/admin/audit-logs", headers=auth_headers(officer_user))
+
+    assert analytics_response.status_code == 403
+    assert audit_response.status_code == 403
+
+
 def test_inactive_staff_profile_is_denied_even_when_user_account_is_active(
     client: TestClient, db_session: Session
 ) -> None:

@@ -1,4 +1,9 @@
 import { useState } from 'react';
+import Button from '../../components/ui/Button';
+import Card from '../../components/ui/Card';
+import FormField from '../../components/ui/FormField';
+import Input from '../../components/ui/Input';
+import Textarea from '../../components/ui/Textarea';
 
 function InspectionForm({ mode, onSubmit, isSubmitting }) {
   const [scheduledAt, setScheduledAt] = useState('');
@@ -16,49 +21,46 @@ function InspectionForm({ mode, onSubmit, isSubmitting }) {
 
   if (mode === 'create') {
     return (
-      <form onSubmit={handleSubmit} className="status-update-form">
-        <label htmlFor="inspection-scheduled-at">
-          Scheduled date (optional)
-          <input
+      <Card as="form" onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <FormField label="Scheduled date" htmlFor="inspection-scheduled-at" hint="Optional">
+          <Input
             id="inspection-scheduled-at"
             type="datetime-local"
             value={scheduledAt}
             onChange={(event) => setScheduledAt(event.target.value)}
           />
-        </label>
-        <button type="submit" disabled={isSubmitting}>
-          {isSubmitting ? 'Scheduling...' : 'Schedule inspection'}
-        </button>
-      </form>
+        </FormField>
+        <Button type="submit" loading={isSubmitting} className="self-start">
+          {isSubmitting ? 'Scheduling…' : 'Schedule inspection'}
+        </Button>
+      </Card>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="status-update-form">
-      <label htmlFor="inspection-summary">
-        Summary
-        <textarea
+    <Card as="form" onSubmit={handleSubmit} className="flex flex-col gap-4">
+      <FormField label="Summary" htmlFor="inspection-summary" required>
+        <Textarea
           id="inspection-summary"
           value={summary}
           onChange={(event) => setSummary(event.target.value)}
           rows={4}
           required
         />
-      </label>
-      <label htmlFor="inspection-action-recommended">
-        Recommended action
-        <textarea
+      </FormField>
+      <FormField label="Recommended action" htmlFor="inspection-action-recommended" required>
+        <Textarea
           id="inspection-action-recommended"
           value={actionRecommended}
           onChange={(event) => setActionRecommended(event.target.value)}
           rows={2}
           required
         />
-      </label>
-      <button type="submit" disabled={isSubmitting}>
-        {isSubmitting ? 'Completing...' : 'Complete inspection'}
-      </button>
-    </form>
+      </FormField>
+      <Button type="submit" loading={isSubmitting} className="self-start">
+        {isSubmitting ? 'Completing…' : 'Complete inspection'}
+      </Button>
+    </Card>
   );
 }
 

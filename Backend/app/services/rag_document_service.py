@@ -7,7 +7,7 @@ from app.core.config import get_settings
 from app.models.rag_document import RagDocument
 from app.models.user import User
 from app.rag import ingestion
-from app.repositories import rag_document_repository
+from app.repositories import audit_log_repository, rag_document_repository
 from app.schemas.rag import RagDocumentCreate, RagDocumentRead
 from app.services import storage_service
 from app.utils.enums import RagDocumentStatus
@@ -50,7 +50,18 @@ def upload_document(
         status=RagDocumentStatus.PENDING,
         uploaded_by_user_id=uploaded_by.id,
     )
-    return rag_document_repository.create(db, document)
+    document = rag_document_repository.create(db, document)
+
+    audit_log_repository.record(
+        db,
+        actor_user_id=uploaded_by.id,
+        action="rag_document_uploaded",
+        entity_type="rag_document",
+        entity_id=document.id,
+        details={"title": document.title, "document_type": document.document_type.value},
+    )
+    db.commit()
+    return document
 
 
 def get_document(db: Session, document_id: uuid.UUID) -> RagDocument:
@@ -60,15 +71,37 @@ def get_document(db: Session, document_id: uuid.UUID) -> RagDocument:
     return document
 
 
-def run_ingestion(db: Session, document: RagDocument) -> RagDocument:
+def run_ingestion(db: Session, document: RagDocument, *, actor_user_id: uuid.UUID) -> RagDocument:
     settings = get_settings()
     file_bytes = storage_service.download_file(settings.rag_storage_bucket, document.storage_path)
-    return ingestion.ingest_document(db, document, file_bytes)
+    document = ingestion.ingest_document(db, document, file_bytes)
+
+    audit_log_repository.record(
+        db,
+        actor_user_id=actor_user_id,
+        action="rag_document_ingested",
+        entity_type="rag_document",
+        entity_id=document.id,
+        details={"status": document.status.value, "chunk_count": document.chunk_count},
+    )
+    db.commit()
+    return document
 
 
-def deactivate_document(db: Session, document: RagDocument) -> RagDocument:
+def deactivate_document(db: Session, document: RagDocument, *, actor_user_id: uuid.UUID) -> RagDocument:
     document.is_active = False
-    return rag_document_repository.update(db, document)
+    document = rag_document_repository.update(db, document)
+
+    audit_log_repository.record(
+        db,
+        actor_user_id=actor_user_id,
+        action="rag_document_deactivated",
+        entity_type="rag_document",
+        entity_id=document.id,
+        details=None,
+    )
+    db.commit()
+    return document
 
 
 def to_document_read(document: RagDocument) -> RagDocumentRead:

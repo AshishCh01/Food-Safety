@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ComplaintForm from '../../components/complaint/ComplaintForm';
+import ContentContainer from '../../components/layout/ContentContainer';
+import PageHeader from '../../components/layout/PageHeader';
+import Card from '../../components/ui/Card';
+import ErrorState from '../../components/ui/ErrorState';
 import { useAuth } from '../../hooks/useAuth';
 import {
   createComplaint,
@@ -62,12 +66,16 @@ function CreateComplaint() {
   }
 
   if (loadError) {
-    return <p className="form-error">{loadError}</p>;
+    return (
+      <ContentContainer>
+        <ErrorState message={loadError} />
+      </ContentContainer>
+    );
   }
 
   return (
-    <section>
-      <h1>Report a food safety issue</h1>
+    <ContentContainer className="max-w-3xl">
+      <PageHeader title="Report a food safety issue" />
       <ComplaintForm
         categories={categories}
         districts={districts}
@@ -76,22 +84,26 @@ function CreateComplaint() {
         error={error}
         token={getAccessToken()}
       />
-      <div className="evidence-uploader">
-        <label className="evidence-upload-label">
-          Attach evidence (optional, uploaded after submission)
-          <input type="file" multiple onChange={handleFileSelection} />
+      <Card>
+        <Card.Header>
+          <Card.Title>Attach evidence</Card.Title>
+        </Card.Header>
+        <p className="mb-2 text-sm text-slate-500">Optional &mdash; photos, videos, or PDFs, uploaded after submission.</p>
+        <label className="flex cursor-pointer items-center justify-center rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-600 hover:border-brand-400 hover:bg-brand-50/40">
+          Choose files
+          <input type="file" multiple onChange={handleFileSelection} className="sr-only" />
         </label>
         {evidenceFiles.length > 0 && (
-          <ul className="evidence-list">
+          <ul className="mt-3 flex flex-col gap-1.5">
             {evidenceFiles.map((file) => (
-              <li key={file.name} className="evidence-list-item">
+              <li key={file.name} className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-700">
                 {file.name}
               </li>
             ))}
           </ul>
         )}
-      </div>
-    </section>
+      </Card>
+    </ContentContainer>
   );
 }
 

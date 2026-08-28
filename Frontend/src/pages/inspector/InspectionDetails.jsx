@@ -7,6 +7,14 @@ import EvidenceAnalysisPanel from '../../components/agent/EvidenceAnalysisPanel'
 import AssistantChat from '../../components/agent/AssistantChat';
 import FindingForm from '../../components/inspection/FindingForm';
 import FindingList from '../../components/inspection/FindingList';
+import ContentContainer from '../../components/layout/ContentContainer';
+import PageHeader from '../../components/layout/PageHeader';
+import Alert from '../../components/ui/Alert';
+import Button from '../../components/ui/Button';
+import Card from '../../components/ui/Card';
+import DetailGrid from '../../components/ui/DetailGrid';
+import ErrorState from '../../components/ui/ErrorState';
+import Skeleton from '../../components/ui/Skeleton';
 import { useAuth } from '../../hooks/useAuth';
 import {
   createAssistantConversation,
@@ -60,8 +68,8 @@ function InspectionDetails() {
           evidenceData.map((item) =>
             getInspectionEvidenceAnalysis(inspectionId, item.id, token)
               .then((result) => [item.id, result])
-              .catch(() => [item.id, null])
-          )
+              .catch(() => [item.id, null]),
+          ),
         );
       })
       .then((entries) => setEvidenceAnalyses(Object.fromEntries(entries)))
@@ -83,7 +91,7 @@ function InspectionDetails() {
       .then((result) =>
         result.items.length > 0
           ? getAssistantConversation(result.items[0].id, token)
-          : createAssistantConversation(token, { inspectionId })
+          : createAssistantConversation(token, { inspectionId }),
       )
       .then((data) => {
         if (!cancelled) setAssistantConversation(data);
@@ -145,11 +153,7 @@ function InspectionDetails() {
   async function handleAddFinding(form) {
     setIsSubmitting(true);
     try {
-      await addFinding(
-        assignment.inspection.id,
-        { ...form, compliant: !!form.compliant },
-        getAccessToken()
-      );
+      await addFinding(assignment.inspection.id, { ...form, compliant: !!form.compliant }, getAccessToken());
       load();
     } catch (err) {
       setError(err.message);
@@ -168,12 +172,9 @@ function InspectionDetails() {
     setEvidenceAnalysisErrors((prev) => ({ ...prev, [evidenceId]: null }));
     setAnalyzingEvidenceId(evidenceId);
     try {
-      const result = await runInspectionEvidenceAnalysis(
-        assignment.inspection.id,
-        evidenceId,
-        getAccessToken(),
-        { force }
-      );
+      const result = await runInspectionEvidenceAnalysis(assignment.inspection.id, evidenceId, getAccessToken(), {
+        force,
+      });
       setEvidenceAnalyses((prev) => ({ ...prev, [evidenceId]: result }));
     } catch (err) {
       setEvidenceAnalysisErrors((prev) => ({ ...prev, [evidenceId]: err.message }));
@@ -184,13 +185,15 @@ function InspectionDetails() {
 
   function renderEvidenceAnalysis(item) {
     return (
-      <EvidenceAnalysisPanel
-        evidenceItem={item}
-        analysis={evidenceAnalyses[item.id]}
-        isRunning={analyzingEvidenceId === item.id}
-        error={evidenceAnalysisErrors[item.id]}
-        onRun={() => handleAnalyzeEvidence(item.id, { force: !!evidenceAnalyses[item.id] })}
-      />
+      <div className="mt-3">
+        <EvidenceAnalysisPanel
+          evidenceItem={item}
+          analysis={evidenceAnalyses[item.id]}
+          isRunning={analyzingEvidenceId === item.id}
+          error={evidenceAnalysisErrors[item.id]}
+          onRun={() => handleAnalyzeEvidence(item.id, { force: !!evidenceAnalyses[item.id] })}
+        />
+      </div>
     );
   }
 
@@ -208,111 +211,148 @@ function InspectionDetails() {
   }
 
   if (!assignment) {
-    return error ? <p className="form-error">{error}</p> : <p>Loading...</p>;
+    return (
+      <ContentContainer className="max-w-3xl">
+        {error ? <ErrorState message={error} /> : <Skeleton.List rows={5} />}
+      </ContentContainer>
+    );
   }
 
   const { complaint, inspection } = assignment;
 
   return (
-    <section>
-      <div className="page-header">
-        <h1>{complaint.title}</h1>
-        <ComplaintStatus status={complaint.status} />
-      </div>
-      <p className="complaint-number">{complaint.complaint_number}</p>
+    <ContentContainer className="max-w-3xl">
+      <PageHeader
+        title={complaint.title}
+        breadcrumbs={[{ label: 'Assigned complaints', path: '/inspector/assignments' }, { label: complaint.complaint_number }]}
+        actions={<ComplaintStatus status={complaint.status} />}
+      />
 
-      <dl className="complaint-detail-grid">
-        <dt>Category</dt>
-        <dd>{complaint.category_name}</dd>
-        <dt>Priority</dt>
-        <dd>{complaint.priority}</dd>
-        {complaint.address_line && (
-          <>
-            <dt>Location</dt>
-            <dd>{complaint.address_line}</dd>
-          </>
-        )}
-      </dl>
+      <Card>
+        <DetailGrid>
+          <dt>Category</dt>
+          <dd>{complaint.category_name}</dd>
+          <dt>Priority</dt>
+          <dd>{complaint.priority}</dd>
+          {complaint.address_line && (
+            <>
+              <dt>Location</dt>
+              <dd>{complaint.address_line}</dd>
+            </>
+          )}
+        </DetailGrid>
+      </Card>
 
-      <h2>Description</h2>
-      <p>{complaint.description}</p>
-
-      {complaint.business && (
-        <>
-          <h2>Business</h2>
-          <p>
+      <Card>
+        <Card.Header>
+          <Card.Title>Description</Card.Title>
+        </Card.Header>
+        <p className="text-sm text-slate-700">{complaint.description}</p>
+        {complaint.business && (
+          <p className="mt-2 text-sm text-slate-600">
             {complaint.business.business_name} &middot; {complaint.business.address}
           </p>
-        </>
-      )}
+        )}
+      </Card>
 
-      {error && (
-        <p className="form-error" role="alert">
-          {error}
-        </p>
-      )}
+      {error && <Alert tone="danger">{error}</Alert>}
 
-      <h2>Inspection</h2>
-      {!inspection && <InspectionForm mode="create" onSubmit={handleCreateInspection} isSubmitting={isSubmitting} />}
+      {!inspection && (
+        <Card>
+          <Card.Header>
+            <Card.Title>Inspection</Card.Title>
+          </Card.Header>
+          <InspectionForm mode="create" onSubmit={handleCreateInspection} isSubmitting={isSubmitting} />
+        </Card>
+      )}
 
       {inspection && (
         <>
-          <p>Status: {formatStatusLabel(inspection.inspection_status)}</p>
-
-          {inspection.inspection_status === 'scheduled' && (
-            <button type="button" onClick={handleStart} disabled={isSubmitting}>
-              Begin inspection
-            </button>
-          )}
+          <Card>
+            <Card.Header>
+              <Card.Title>Inspection</Card.Title>
+              {inspection.inspection_status === 'scheduled' && (
+                <Button size="sm" onClick={handleStart} disabled={isSubmitting}>
+                  Begin inspection
+                </Button>
+              )}
+            </Card.Header>
+            <p className="text-sm text-slate-700">Status: {formatStatusLabel(inspection.inspection_status)}</p>
+          </Card>
 
           {inspection.inspection_status !== 'completed' && (
             <>
-              <h3>Findings</h3>
-              <FindingList findings={inspection.findings} />
-              <FindingForm onSubmit={handleAddFinding} isSubmitting={isSubmitting} />
+              <Card>
+                <Card.Header>
+                  <Card.Title>Findings</Card.Title>
+                </Card.Header>
+                <FindingList findings={inspection.findings} />
+                <div className="mt-4">
+                  <FindingForm onSubmit={handleAddFinding} isSubmitting={isSubmitting} />
+                </div>
+              </Card>
 
-              <h3>Evidence</h3>
-              <EvidenceUploader
-                evidence={evidence}
-                onUpload={handleUploadEvidence}
-                renderExtra={renderEvidenceAnalysis}
-              />
+              <Card>
+                <Card.Header>
+                  <Card.Title>Evidence</Card.Title>
+                </Card.Header>
+                <EvidenceUploader evidence={evidence} onUpload={handleUploadEvidence} renderExtra={renderEvidenceAnalysis} />
+              </Card>
             </>
           )}
 
           {inspection.inspection_status === 'in_progress' && (
-            <>
-              <h3>Complete inspection</h3>
+            <Card>
+              <Card.Header>
+                <Card.Title>Complete inspection</Card.Title>
+              </Card.Header>
               <InspectionForm mode="complete" onSubmit={handleComplete} isSubmitting={isSubmitting} />
-            </>
+            </Card>
           )}
 
           {inspection.inspection_status === 'completed' && (
             <>
-              <h3>Findings</h3>
-              <FindingList findings={inspection.findings} />
-              <h3>Evidence</h3>
-              <EvidenceUploader evidence={evidence} readOnly renderExtra={renderEvidenceAnalysis} />
-              <p>
-                <strong>Summary:</strong> {inspection.summary}
-              </p>
-              <p>
-                <strong>Recommended action:</strong> {inspection.action_recommended}
-              </p>
+              <Card>
+                <Card.Header>
+                  <Card.Title>Findings</Card.Title>
+                </Card.Header>
+                <FindingList findings={inspection.findings} />
+              </Card>
+              <Card>
+                <Card.Header>
+                  <Card.Title>Evidence</Card.Title>
+                </Card.Header>
+                <EvidenceUploader evidence={evidence} readOnly renderExtra={renderEvidenceAnalysis} />
+              </Card>
+              <Card>
+                <Card.Header>
+                  <Card.Title>Outcome</Card.Title>
+                </Card.Header>
+                <p className="text-sm text-slate-700">
+                  <strong className="font-medium text-slate-900">Summary:</strong> {inspection.summary}
+                </p>
+                <p className="mt-1 text-sm text-slate-700">
+                  <strong className="font-medium text-slate-900">Recommended action:</strong> {inspection.action_recommended}
+                </p>
+              </Card>
             </>
           )}
 
-          <h3>Inspector Assistant</h3>
-          <AssistantChat
-            messages={assistantConversation ? assistantConversation.messages : []}
-            onSend={handleSendAssistantMessage}
-            isSending={isAssistantSending}
-            error={assistantError}
-            isLoading={isAssistantLoading}
-          />
+          <Card>
+            <Card.Header>
+              <Card.Title>Inspector Assistant</Card.Title>
+            </Card.Header>
+            <AssistantChat
+              messages={assistantConversation ? assistantConversation.messages : []}
+              onSend={handleSendAssistantMessage}
+              isSending={isAssistantSending}
+              error={assistantError}
+              isLoading={isAssistantLoading}
+            />
+          </Card>
         </>
       )}
-    </section>
+    </ContentContainer>
   );
 }
 
