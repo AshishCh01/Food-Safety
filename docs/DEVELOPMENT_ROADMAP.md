@@ -501,16 +501,25 @@ sinks such as `dangerouslySetInnerHTML` exist in the codebase).
 **Dependencies:** `pip-audit` found 66 known vulnerabilities across 6
 backend packages; `pyjwt`, `python-dotenv`, `python-multipart`, and `pypdf`
 were bumped to current patched versions (66 vulnerabilities in 6 packages ->
-10 in 2), re-verified against the full test suite. Two are left as
-documented technical debt rather than force-fixed in this pass: `starlette`
-is pinned transitively by `fastapi==0.115.6`'s `starlette<0.42.0` constraint
-- fixing it needs a coordinated `fastapi` upgrade spanning ~26 minor
-versions (0.115 -> 0.141+) with dedicated regression testing, which is
-out of scope for a contained hardening pass; `pytest` is a dev-only tool
-never shipped to production. `npm audit` found 0 vulnerabilities in
-frontend production dependencies; 5 (1 critical) exist only in `vitest`'s
-transitive dev-tooling chain (`esbuild`/`vite`, a dev-server-only issue),
-not shipped in the production build.
+10 in 2), re-verified against the full test suite. `npm audit` found 0
+vulnerabilities in frontend production dependencies; 5 (1 critical) exist
+only in `vitest`'s transitive dev-tooling chain (`esbuild`/`vite`, a
+dev-server-only issue), not shipped in the production build.
+
+**Follow-up (same day):** the remaining `starlette` CVE chain (10
+vulnerabilities, pinned transitively by `fastapi==0.115.6`'s
+`starlette<0.42.0` constraint) was resolved by upgrading `fastapi` to
+0.141.1, which pulls `starlette` 1.6.0 - `pip-audit` now shows only the
+pre-existing dev-only `pytest` finding. No application code changes were
+required; the full 327-test backend suite, `pip check`, OpenAPI/`/docs`
+generation, and a module-import sweep (Supabase Storage, PostGIS, pgvector,
+Gemini, all four AI agents) all passed unchanged against the upgraded
+stack. `pydantic==2.10.4` and `python-multipart==0.0.32` already satisfied
+the new `fastapi`'s minimum constraints, so neither needed to move.
+`starlette` itself is intentionally left unpinned in `requirements.txt`,
+inherited from `fastapi`'s own dependency spec, per this project's
+"upgrade fastapi, let it determine starlette" policy - see
+`docs/SECURITY_AND_RBAC.md` section 18 for the updated finding.
 
 No product features, UI redesign, or API contract changes were made in this
 phase, per the phase's own scope.
