@@ -75,6 +75,50 @@ Suggested columns:
 
 Do not store plaintext passwords.
 
+### `refresh_sessions`
+
+Purpose: server-side, revocable refresh-token sessions
+(docs/SECURITY_AND_RBAC.md section 18). Access tokens remain short-lived,
+stateless JWTs; refresh tokens are opaque random strings whose hash is
+looked up here on every `POST /auth/refresh` call, which is what makes
+revocation possible - a stateless JWT refresh token cannot be revoked once
+issued.
+
+Columns:
+
+- `id` UUID PK - also embedded as the `sid` claim on the access token
+  issued alongside it, so `POST /auth/logout` can revoke the right row
+  using only the access token already required to call it
+- `user_id` FK `users.id`, `ondelete=CASCADE`
+- `family_id` - constant across every rotation descending from one login;
+  lets the whole lineage be revoked at once (logout, deactivation, reuse
+  detection)
+- `token_hash` - SHA-256 hex digest of the refresh token; unique, indexed.
+  **The plaintext token is never stored.**
+- `created_at`, `expires_at`
+- `revoked_at`, `revoked_reason` (`rotated` | `logout` |
+  `account_deactivated` | `reuse_detected` - see
+  `app/utils/enums.py:RefreshSessionRevokedReason`)
+- `replaced_by_id` - self-referential FK, `ondelete=SET NULL`; the session
+  that replaced this one via rotation
+
+Refresh tokens rotate on every successful `POST /auth/refresh`: the
+presented token's session is revoked (`reason=rotated`) and a new one is
+created in the same `family_id`. Presenting an already-rotated token again
+is rejected; if that happens more than
+`Settings.refresh_token_reuse_grace_seconds` (default 5s) after the
+rotation - ruling out a benign near-simultaneous concurrent refresh from,
+e.g., multiple browser tabs - the entire `family_id` is revoked
+(`reason=reuse_detected`), since that pattern is the practical signature of
+a leaked/replayed token. See `app/services/auth_service.py` for the full
+rotation/reuse-detection state machine.
+
+Rows are never deleted by the request-handling code - `scripts/cleanup_refresh_sessions.py`
+periodically deletes expired/revoked rows once they age past a retention
+window (7 days generally, 90 days for `reuse_detected` rows). See
+`docs/SECURITY_AND_RBAC.md` section 20 for the full retention/cleanup
+policy.
+
 ## 5. Roles
 
 A user has one application role in the initial implementation:

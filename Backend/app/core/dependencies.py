@@ -43,6 +43,34 @@ def get_current_user(
     return user
 
 
+def get_current_session_id(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> uuid.UUID | None:
+    """Resolves the `sid` claim (the refresh_sessions row an access token
+    was issued alongside - see app/core/security.py:create_access_token)
+    from the current request's access token, for `POST /auth/logout` to
+    revoke that specific server-side session. Deliberately decodes the
+    token independently of `get_current_user` rather than changing that
+    function's return type, since it's used throughout the app and callers
+    only need the resolved `User`.
+
+    Returns None (rather than raising) for a missing/unparseable `sid` -
+    e.g. an access token issued before this feature existed - so logout
+    still degrades to a client-side-only token discard instead of failing.
+    """
+    if credentials is None:
+        raise AuthenticationRequiredError()
+
+    payload = decode_token(credentials.credentials, TokenType.ACCESS)
+    raw_sid = payload.get("sid")
+    if not raw_sid:
+        return None
+    try:
+        return uuid.UUID(raw_sid)
+    except ValueError:
+        return None
+
+
 def require_roles(*roles: UserRole):
     def dependency(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role not in roles:

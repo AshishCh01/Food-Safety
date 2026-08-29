@@ -1,8 +1,10 @@
+import uuid
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_session_id, get_current_user
 from app.core.rate_limit import login_rate_limiter, refresh_rate_limiter, register_rate_limiter
 from app.models.user import User
 from app.schemas.auth import (
@@ -41,7 +43,12 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> TokenResp
 
 
 @router.post("/logout")
-def logout(current_user: User = Depends(get_current_user)) -> dict:
+def logout(
+    current_user: User = Depends(get_current_user),
+    session_id: uuid.UUID | None = Depends(get_current_session_id),
+    db: Session = Depends(get_db),
+) -> dict:
+    auth_service.logout(db, session_id)
     return {"message": "Logged out successfully."}
 
 

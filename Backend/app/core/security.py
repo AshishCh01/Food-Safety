@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -11,7 +13,6 @@ from app.utils.exceptions import InvalidTokenError
 
 class TokenType(str, Enum):
     ACCESS = "access"
-    REFRESH = "refresh"
 
 
 def hash_password(password: str) -> str:
@@ -49,7 +50,14 @@ def create_access_token(
     role: str,
     district_id: uuid.UUID | None,
     is_active: bool,
+    session_id: uuid.UUID | None = None,
 ) -> str:
+    """`session_id` (claim `sid`) links this access token back to the
+    refresh_sessions row it was issued alongside, so `POST /auth/logout` can
+    revoke that specific server-side session using only the access token
+    already required to call it - see app/services/auth_service.py and
+    app/core/dependencies.get_current_access_token_claims. It is an internal
+    JWT claim, never surfaced in an API response body."""
     settings = get_settings()
     return _create_token(
         user_id,
@@ -59,13 +67,9 @@ def create_access_token(
             "role": role,
             "district_id": str(district_id) if district_id else None,
             "status": "active" if is_active else "inactive",
+            "sid": str(session_id) if session_id else None,
         },
     )
-
-
-def create_refresh_token(user_id: uuid.UUID) -> str:
-    settings = get_settings()
-    return _create_token(user_id, TokenType.REFRESH, timedelta(days=settings.refresh_token_expire_days))
 
 
 def decode_token(token: str, expected_type: TokenType) -> dict:
@@ -81,3 +85,24 @@ def decode_token(token: str, expected_type: TokenType) -> dict:
         raise InvalidTokenError("Unexpected token type.")
 
     return payload
+
+
+# --- Refresh tokens -----------------------------------------------------
+# Refresh tokens are deliberately NOT JWTs. They are opaque, high-entropy
+# random strings that only the database can resolve back to a user (via
+# refresh_sessions.token_hash), which is what makes server-side revocation
+# possible - a JWT refresh token would remain valid (its signature still
+# verifies) for its whole lifetime no matter what the server does. Access
+# tokens stay JWTs since they're short-lived and don't need to be
+# individually revocable (docs/SECURITY_AND_RBAC.md section 18).
+
+
+def generate_refresh_token() -> str:
+    """~384 bits of entropy - infeasible to guess, so a plain SHA-256
+    lookup hash (no HMAC secret needed) is sufficient, the same pattern used
+    for API keys/session tokens generally."""
+    return secrets.token_urlsafe(48)
+
+
+def hash_refresh_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

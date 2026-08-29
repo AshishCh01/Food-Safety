@@ -22,6 +22,22 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
+    # Tolerance window for concurrent refresh requests that both presented
+    # the same (still-valid-at-request-time) refresh token - see
+    # app/services/auth_service.py's reuse-detection logic. A losing
+    # concurrent request is rejected either way; this only decides whether
+    # it's treated as benign (no family-wide revocation) or as replay of a
+    # stale token (revokes the whole session family).
+    refresh_token_reuse_grace_seconds: int = 5
+    # Retention for dead refresh_sessions rows (expired, or revoked for a
+    # routine reason: rotated/logout/account_deactivated) before
+    # scripts/cleanup_refresh_sessions.py deletes them - see
+    # docs/SECURITY_AND_RBAC.md section 20.
+    refresh_session_retention_days: int = 7
+    # Longer retention specifically for reuse_detected revocations - the
+    # strongest signal of a leaked/replayed token and the most valuable to
+    # keep around for incident investigation.
+    refresh_session_reuse_detected_retention_days: int = 90
 
     supabase_url: str = ""
     supabase_service_role_key: SecretStr = SecretStr("")

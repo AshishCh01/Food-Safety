@@ -524,4 +524,62 @@ inherited from `fastapi`'s own dependency spec, per this project's
 No product features, UI redesign, or API contract changes were made in this
 phase, per the phase's own scope.
 
+**Follow-up (same week): server-side refresh-token sessions.** The last
+remaining authentication risk from section 18's findings - stateless
+refresh tokens with no server-side revocation - was fixed. Refresh tokens
+are now opaque, SHA-256-hashed, database-backed sessions
+(`refresh_sessions` table, `app/models/refresh_session.py`,
+`alembic/versions/b2c3d4e5f6a7_add_refresh_sessions.py`) using the existing
+Supabase PostgreSQL database - no Redis or other external store, per the
+task's constraint. Refresh tokens rotate on every use, with reuse detection
+that distinguishes benign concurrent refresh (e.g. multiple tabs) from
+replay of a stale token (revokes the whole session lineage); logout and
+admin account deactivation both revoke sessions server-side immediately.
+Access tokens are unchanged: still short-lived, stateless JWTs, now
+carrying a `sid` claim so logout can resolve the right session without a
+request body. Full design in `docs/SECURITY_AND_RBAC.md` section 19 and
+`docs/DATABASE_SCHEMA.md` section 4 (`refresh_sessions`).
+
+The only required frontend change was persisting the *rotated* refresh
+token after a silent refresh in `AuthProvider`
+(`frontend/src/store/authStore.jsx`) - previously only the new access token
+was saved, which would have made the next refresh attempt present an
+already-revoked token and force an unnecessary logout. `POST /auth/logout`
+needed no frontend change, since session revocation is resolved entirely
+from the access token already sent.
+
+Existing `/auth/login`, `/auth/refresh`, `/auth/logout` request/response
+shapes are unchanged - this was a server-side and storage-layer change, not
+an API contract change. New tests:
+`app/tests/unit/test_refresh_session_repository.py`,
+`app/tests/integration/test_refresh_sessions.py`,
+`frontend/src/store/authStore.test.jsx`, plus additions to
+`app/tests/unit/test_security.py` (opaque token generation/hashing, the new
+`sid` claim). Full backend suite: 348 passing (up from 327). Frontend: 60
+passing (up from 58), `oxlint` clean, production build clean. `pip check`
+and `pip-audit` unchanged (no new dependencies introduced).
+
+**Follow-up (same week): refresh-session maintenance.** The
+`refresh_sessions` cleanup gap noted above was closed. Added a two-tier
+retention policy (`Settings.refresh_session_retention_days` = 7 days for
+expired/routinely-revoked rows, `refresh_session_reuse_detected_retention_days`
+= 90 days for `reuse_detected` rows, since those carry the most
+incident-investigation value) and `scripts/cleanup_refresh_sessions.py` - a
+standalone script following the existing `scripts/create_admin.py` /
+`scripts/seed_districts.py` convention, run via cron/Task
+Scheduler/scheduled CI (no Redis, no Celery, no in-process scheduler added).
+It only ever deletes rows that are already permanently unusable and past
+their retention window, deletes in batches with a commit between each to
+avoid long-held locks on a live database, handles the table's
+self-referential FK explicitly rather than depending on `ON DELETE SET
+NULL` enforcement, and supports `--dry-run`. Full policy and safety
+reasoning in `docs/SECURITY_AND_RBAC.md` section 20 (new), with a pointer
+from `docs/DATABASE_SCHEMA.md`'s `refresh_sessions` entry. New tests:
+`app/tests/unit/test_refresh_session_cleanup.py` (10 tests: live sessions
+never touched, per-reason retention windows including the extended
+`reuse_detected` tier, batching/resumability, the self-referential-FK
+nulling, and service-level looping). Full backend suite: 358 passing (up
+from 348); no frontend changes were needed. No new dependencies - `pip
+check` and `pip-audit` unaffected.
+
 The next implementation phase is **Phase 13**.

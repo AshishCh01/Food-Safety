@@ -468,6 +468,34 @@ yet:
   `app/tests/unit/test_evidence_analysis_repository.py`. No new top-level
   directories, no frontend changes, and no API contract/schema changes
   beyond the `assignments.complaint_id` constraint above.
+- **Phase 12 follow-up** (server-side refresh-token sessions - see
+  `docs/SECURITY_AND_RBAC.md` section 19) added
+  `app/models/refresh_session.py` (`RefreshSession`),
+  `app/repositories/refresh_session_repository.py`,
+  `alembic/versions/b2c3d4e5f6a7_add_refresh_sessions.py`, and reworked
+  `app/services/auth_service.py`'s login/refresh/logout flow plus
+  `app/core/security.py` (opaque refresh tokens replace JWT refresh tokens;
+  access tokens gained a `sid` claim) and `app/core/dependencies.py`
+  (`get_current_session_id`). `app/api/admin/router.py`'s
+  `update_user_status` now revokes a deactivated user's sessions. New
+  tests: `app/tests/unit/test_refresh_session_repository.py`,
+  `app/tests/integration/test_refresh_sessions.py`,
+  `frontend/src/store/authStore.test.jsx`. The only frontend change was
+  persisting the rotated refresh token in `store/authStore.jsx` after a
+  silent refresh - no other frontend files changed, no UI changes, and
+  `/auth/*` request/response shapes are unchanged. A second follow-up
+  (`docs/SECURITY_AND_RBAC.md` section 20) added the retention/cleanup
+  policy for that table: `scripts/cleanup_refresh_sessions.py` (a
+  standalone script, matching the existing `scripts/create_admin.py` /
+  `scripts/seed_districts.py` convention - not an API endpoint), backed by
+  `auth_service.cleanup_expired_and_revoked_sessions` /
+  `count_sessions_eligible_for_cleanup` and new
+  `refresh_session_repository` functions
+  (`count_eligible_for_cleanup`, `delete_expired_and_revoked_batch`). No
+  new top-level directories, no scheduler/Celery/Redis dependency added -
+  the script is intended to be invoked by cron/Task
+  Scheduler/scheduled-CI, external to the application process. New tests:
+  `app/tests/unit/test_refresh_session_cleanup.py`.
 
 Update this note (or remove it once the tree is fully current again) the
 next time a phase changes backend or frontend structure.

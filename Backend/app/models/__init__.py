@@ -18,6 +18,7 @@ from app.models.investigation_brief import InvestigationBrief
 from app.models.notification import Notification
 from app.models.rag_document import RagDocument
 from app.models.rag_document_chunk import RagDocumentChunk
+from app.models.refresh_session import RefreshSession
 from app.models.staff_profile import StaffProfile
 from app.models.user import User
 
@@ -44,4 +45,5 @@ __all__ = [
     "RagDocumentChunk",
     "AssistantConversation",
     "AssistantMessage",
+    "RefreshSession",
 ]

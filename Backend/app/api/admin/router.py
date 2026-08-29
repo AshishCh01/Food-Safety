@@ -21,7 +21,14 @@ from app.schemas.district import DistrictRead
 from app.schemas.rag import PaginatedRagDocuments, RagDocumentCreate, RagDocumentRead
 from app.schemas.staff import StaffCreateRequest, StaffRead
 from app.schemas.user import PaginatedUsers, UserStatusUpdate, UserSummary
-from app.services import analytics_service, audit_log_service, district_service, rag_document_service, staff_service
+from app.services import (
+    analytics_service,
+    audit_log_service,
+    auth_service,
+    district_service,
+    rag_document_service,
+    staff_service,
+)
 from app.utils.enums import RagDocumentStatus, RagDocumentType, UserRole
 from app.utils.exceptions import NotFoundError
 from app.utils.uploads import read_upload_bounded
@@ -93,13 +100,20 @@ def update_user_status(
     if user is None:
         raise NotFoundError("User was not found.")
     user = user_repository.set_active_status(db, user, payload.is_active)
+
+    revoked_sessions = 0
+    if not payload.is_active:
+        # Deactivation must not leave existing refresh tokens usable until
+        # they naturally expire (docs/SECURITY_AND_RBAC.md section 18).
+        revoked_sessions = auth_service.revoke_all_sessions_for_user(db, user.id)
+
     audit_log_repository.record(
         db,
         actor_user_id=admin_user.id,
         action="user_status_updated",
         entity_type="user",
         entity_id=user.id,
-        details={"is_active": payload.is_active},
+        details={"is_active": payload.is_active, "revoked_sessions": revoked_sessions},
     )
     db.commit()
     return UserSummary.model_validate(user)

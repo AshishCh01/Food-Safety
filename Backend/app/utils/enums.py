@@ -123,3 +123,15 @@ class NotificationType(str, enum.Enum):
     INSPECTION_SCHEDULED = "inspection_scheduled"
     INSPECTION_COMPLETED = "inspection_completed"
     COMPLAINT_RESOLVED = "complaint_resolved"
+
+
+class RefreshSessionRevokedReason(str, enum.Enum):
+    """Why a refresh_sessions row was revoked - see
+    app/services/auth_service.py for where each is set. Stored as a plain
+    string column (not a DB enum type) since this is an internal diagnostic
+    tag, not a workflow state with validated transitions."""
+
+    ROTATED = "rotated"
+    LOGOUT = "logout"
+    ACCOUNT_DEACTIVATED = "account_deactivated"
+    REUSE_DETECTED = "reuse_detected"

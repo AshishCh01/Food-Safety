@@ -107,7 +107,10 @@ def test_user_status_update_creates_audit_record(client: TestClient, db_session:
     assert response.status_code == 200
     body = response.json()
     assert body["total"] == 1
-    assert body["items"][0]["details"] == {"is_active": False}
+    # revoked_sessions records how many refresh sessions the deactivation
+    # invalidated (docs/SECURITY_AND_RBAC.md section 18) - 0 here since the
+    # citizen never logged in within this test.
+    assert body["items"][0]["details"] == {"is_active": False, "revoked_sessions": 0}
 
 
 def test_audit_log_filters_by_actor(client: TestClient, db_session: Session) -> None:

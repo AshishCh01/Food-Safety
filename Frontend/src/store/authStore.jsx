@@ -38,7 +38,14 @@ export function AuthProvider({ children }) {
         if (refreshToken) {
           try {
             const tokens = await refreshAccessToken(refreshToken);
+            // The backend rotates refresh tokens on every use and revokes
+            // the one just presented (server-side session management -
+            // docs/SECURITY_AND_RBAC.md section 18), so the token above is
+            // now invalid. Both must be persisted or the next refresh
+            // attempt would present an already-revoked token and force an
+            // unnecessary logout.
             localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
+            localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
             const me = await fetchCurrentUser(tokens.access_token);
             if (isMounted) setUser(me);
           } catch {
@@ -72,8 +79,10 @@ export function AuthProvider({ children }) {
       try {
         await logoutRequest(accessToken);
       } catch {
-        // Stateless JWT: logout is best-effort server-side. The token is
-        // discarded client-side regardless.
+        // Best-effort: the backend revokes the server-side refresh session
+        // tied to this access token, but even if that call fails (e.g.
+        // network error), the tokens are still discarded client-side below
+        // so this device stops being able to use them either way.
       }
     }
     clearSession();

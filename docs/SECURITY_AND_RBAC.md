@@ -308,11 +308,12 @@ following real, verified issues were found and fixed:
   `supabase_service_role_key`) rather than `SecretStr` - no active leak was
   found, but this is defense-in-depth against a future debug log or
   unhandled-exception traceback accidentally printing one.
-- **Refresh tokens are stateless with no server-side revocation** - logout
-  and refresh both only validate the JWT signature/expiry; there is no
-  token blocklist. **Known limitation**, not fixed in this phase: a leaked
-  refresh token remains valid for its full lifetime. Mitigated by a short
-  access-token TTL; a real fix needs a persisted token/session store.
+- **Refresh tokens were stateless with no server-side revocation** - logout
+  and refresh both only validated the JWT signature/expiry; there was no
+  token blocklist, so a leaked refresh token remained valid for its full
+  lifetime regardless of logout/deactivation. **Fixed** in a follow-up pass
+  (see section 19 below): refresh tokens are now opaque, hashed,
+  database-backed sessions with rotation and reuse detection.
 - **`GET /businesses` and `GET /businesses/{id}` are not district-scoped**
   for any authenticated role. Reviewed and treated as an intentional design
   choice, not a bug: businesses are the subject of complaints (comparable to
@@ -322,3 +323,178 @@ following real, verified issues were found and fixed:
 
 See `docs/DEVELOPMENT_ROADMAP.md` Phase 12 for the full list of fixes
 (including performance/reliability items) and the dependency scan results.
+
+## 19. Server-Side Refresh-Token Sessions
+
+Follow-up to section 18's stateless-refresh-token finding. Uses the existing
+Supabase PostgreSQL database via SQLAlchemy/Alembic - no Redis or other
+external store.
+
+**Design:**
+
+- Access tokens are unchanged: short-lived (default 30 minutes), stateless
+  JWTs, validated on every request without a database round-trip.
+- Refresh tokens are opaque, high-entropy random strings (not JWTs). Only a
+  SHA-256 hash is ever persisted, in `refresh_sessions.token_hash`
+  (docs/DATABASE_SCHEMA.md section 4) - a database read alone cannot be
+  used to authenticate as the user, and the plaintext is never logged or
+  stored anywhere.
+- Every access token carries a `sid` claim identifying the `refresh_sessions`
+  row it was issued alongside, so `POST /auth/logout` can revoke exactly
+  that session using only the access token already required to call it - no
+  request body needed, preserving the existing `/auth/logout` contract.
+- **Rotation:** every successful `POST /auth/refresh` revokes the presented
+  token's session (`reason=rotated`) and issues a new access/refresh pair
+  from a new session in the same `family_id` lineage. The response shape is
+  unchanged (`TokenResponse`); the returned `refresh_token` is simply a
+  different value that the client must persist and use next time.
+- **Reuse detection:** presenting an already-revoked refresh token is always
+  rejected. If it was revoked by rotation more than
+  `refresh_token_reuse_grace_seconds` (default 5s) ago, the entire session
+  family is revoked - the practical signature of a leaked/replayed token,
+  as opposed to a benign near-simultaneous concurrent refresh (e.g. two
+  browser tabs sharing `localStorage` both refreshing at once), which stays
+  within the grace window and only rejects the losing request.
+- **Concurrency safety:** rotation claims a session via a single atomic
+  conditional `UPDATE ... WHERE id = :id AND revoked_at IS NULL`, so exactly
+  one of any number of simultaneous refresh requests presenting the same
+  token can ever win; the DB row-level consistency of that one statement is
+  the actual guarantee, not application-level locking.
+- **Logout** revokes only the current session (`reason=logout`).
+- **Account deactivation** (`PATCH /admin/users/{user_id}/status` with
+  `is_active=false`) revokes every active session for that user
+  immediately, regardless of family - existing refresh tokens stop working
+  right away instead of drifting on until they naturally expire.
+- All refresh-token failure modes (unknown token, expired, revoked,
+  reuse-detected) return the same generic `401 INVALID_TOKEN` response, to
+  avoid giving a caller an oracle for which specific condition occurred.
+
+See `app/services/auth_service.py` and `app/repositories/refresh_session_repository.py`
+for the implementation, and `app/tests/integration/test_refresh_sessions.py`
+/ `app/tests/unit/test_refresh_session_repository.py` for the test coverage
+(rotation, reuse across and within the grace window, concurrent refresh,
+logout, deactivation, and an authorization/RBAC regression check).
+
+See section 20 below for how `refresh_sessions` rows are retained and
+cleaned up over time.
+
+## 20. Refresh-Session Maintenance: Retention and Cleanup
+
+`refresh_sessions` (section 19) accumulates a row for every login and every
+rotation. Nothing is ever deleted automatically by the request-handling
+code path - deletion is a separate, explicit maintenance concern, kept out
+of the request/response cycle so a login or refresh can never be slowed
+down (or fail) because of cleanup work. This section defines that
+maintenance strategy. It uses only the existing Supabase PostgreSQL
+database via SQLAlchemy - no Redis, no Celery, no in-process scheduler.
+
+### 20.1 What accumulates
+
+- **Expired sessions** - a refresh token that was issued but never used
+  again before `expires_at` (default 7 days after issuance). These can
+  never succeed a refresh again (`refresh_access_token` rejects on
+  `expires_at <= now` regardless of `revoked_at`).
+- **Revoked sessions** - every rotation, logout, and account deactivation
+  leaves behind a revoked row (`revoked_at` set). These can also never
+  succeed a refresh again (`refresh_access_token` rejects immediately when
+  `revoked_at is not None`). In steady state this is the largest source of
+  rows: a token rotates on every single successful refresh, so an
+  active user accumulates one revoked row per refresh, indefinitely, unless
+  cleaned up.
+
+Both categories are **permanently unusable the moment they enter that
+state** - there is no path in `auth_service.py` that ever un-expires or
+un-revokes a row. That is what makes deleting them, eventually, safe: a row
+eligible for cleanup could not have been presented successfully a moment
+before deletion either.
+
+### 20.2 Retention policy
+
+Deletion is not immediate on expiry/revocation - each dead row is kept for
+a retention window first, so it remains available for near-term debugging
+("why did my session just log out?") and security investigation. Two
+tiers, controlled by `Settings` (`app/core/config.py`):
+
+| Revocation reason / state | Setting | Default |
+| --- | --- | --- |
+| Expired (never revoked) | `refresh_session_retention_days` | 7 days after `expires_at` |
+| Revoked: `rotated`, `logout`, `account_deactivated` | `refresh_session_retention_days` | 7 days after `revoked_at` |
+| Revoked: `reuse_detected` | `refresh_session_reuse_detected_retention_days` | 90 days after `revoked_at` |
+
+`reuse_detected` gets materially longer retention because it is the
+system's strongest signal of a leaked or replayed refresh token - the row
+(and its `family_id`, correlatable against other sessions for the same
+user) is exactly the evidence an incident investigation would need, and it
+is comparatively rare, so the extra retention costs little in row count.
+Routine rotation churn is the opposite: high volume, low forensic value
+beyond about a week, so it gets the short tier. These two tiers cover it
+without over-engineering a per-reason policy the project has no concrete
+requirement for; adjust the two settings (not the code) if a specific
+compliance/retention requirement is identified later - see section 15's
+general data-retention note, which applies here too.
+
+### 20.3 Cleanup mechanism
+
+`scripts/cleanup_refresh_sessions.py` (a standalone script, following this
+project's existing `scripts/` convention alongside `create_admin.py`,
+`seed_districts.py`, etc. - not a new API endpoint, since a destructive
+bulk-delete operation should not be reachable over HTTP) deletes rows past
+their retention window:
+
+```bash
+# from Backend/
+venv/Scripts/python.exe -m scripts.cleanup_refresh_sessions --dry-run   # report only
+venv/Scripts/python.exe -m scripts.cleanup_refresh_sessions             # delete
+```
+
+It calls `app/services/auth_service.py:cleanup_expired_and_revoked_sessions`,
+which in turn uses `app/repositories/refresh_session_repository.py`'s
+eligibility query (`count_eligible_for_cleanup` /
+`delete_expired_and_revoked_batch`).
+
+**Why it's safe to run on a schedule against a live database:**
+
+- **Never touches a live session.** The eligibility query is a strict
+  subset of "already expired or already revoked, and aged past its
+  retention window" - by construction (section 20.1) that can never
+  include a row that could still succeed a refresh. There is no window
+  where a concurrently-running refresh request and the cleanup job could
+  race over the same still-usable row, because a row only becomes
+  cleanup-eligible once no future refresh could ever legitimately use it
+  again - eligibility is monotonic (a row never becomes ineligible once
+  eligible, and never becomes eligible before it's genuinely dead).
+- **Batched deletes.** Each call deletes at most `--batch-size` rows
+  (default 1000) and commits before continuing, rather than one unbounded
+  `DELETE`. This bounds how long any single transaction holds locks or
+  grows the write-ahead log, which matters most on the first run after a
+  gap (a large accumulated backlog) or on a table that's grown large.
+- **Self-referential FK handled explicitly.** `replaced_by_id` (the link
+  from a rotated-away session to the session that replaced it) is nulled
+  out for any row about to be deleted, in the same transaction, rather than
+  relying solely on the column's `ON DELETE SET NULL` - see
+  `refresh_session_repository.delete_expired_and_revoked_batch`'s
+  docstring.
+- **Idempotent.** Running it twice in a row (or concurrently with itself)
+  deletes nothing extra the second time; there's no state beyond what's
+  already in the table.
+- **`--dry-run` first.** Reports the eligible count without deleting
+  anything, for verifying the policy's effect before scheduling it or
+  after changing the retention settings.
+
+### 20.4 Scheduling
+
+There is no in-process scheduler, background worker, Celery, or Redis in
+this project, and this maintenance task does not need one - running the
+script periodically *is* the mechanism. Wire it up with whatever the
+deployment environment already provides:
+
+- **Local/VM deployment:** a daily cron entry, e.g.
+  `0 3 * * * cd /path/to/backend && venv/bin/python -m scripts.cleanup_refresh_sessions`.
+- **Windows:** a daily Task Scheduler entry running the same command.
+- **Containerized/CI-driven deployment (Phase 13):** a scheduled CI/CD job
+  or a one-shot container run on a timer, invoking the same script inside
+  the backend image - no new service or long-running process to deploy.
+
+Daily is a reasonable default frequency given 7/90-day retention windows -
+there is no urgency to clean up more often, since eligible rows are already
+long dead by the time they're deleted either way.
