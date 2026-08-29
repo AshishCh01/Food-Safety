@@ -64,11 +64,22 @@ def complaint_trend(
 
 
 def average_resolution_hours(db: Session, district_id: uuid.UUID | None = None) -> float | None:
-    """Computed in Python rather than via SQL EXTRACT(EPOCH...), which has no
-    SQLite equivalent - the same cross-dialect tradeoff as
-    haversine_distance_km in complaint_repository.list_within_radius. Fine at
-    this data scale since it only fetches two timestamp columns per resolved
-    complaint."""
+    """On PostgreSQL, averages in SQL via EXTRACT(EPOCH...) so this hot
+    dashboard query (hit by every officer/admin analytics load) never pulls
+    more than a single scalar row back, regardless of how many complaints
+    have been resolved. SQLite (the test database) has no EXTRACT(EPOCH...)
+    equivalent, so it falls back to fetching the two timestamp columns and
+    averaging in Python - the same cross-dialect tradeoff as
+    haversine_distance_km in complaint_repository.list_within_radius."""
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        avg_seconds_expr = func.avg(func.extract("epoch", Complaint.resolved_at - Complaint.reported_at))
+        stmt = select(avg_seconds_expr).where(Complaint.resolved_at.is_not(None))
+        stmt = _scoped(stmt, district_id)
+        avg_seconds = db.execute(stmt).scalar()
+        if avg_seconds is None:
+            return None
+        return round(float(avg_seconds) / 3600, 2)
+
     stmt = select(Complaint.reported_at, Complaint.resolved_at).where(Complaint.resolved_at.is_not(None))
     stmt = _scoped(stmt, district_id)
     rows = db.execute(stmt).all()

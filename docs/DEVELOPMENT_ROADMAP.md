@@ -415,7 +415,7 @@ As of the current roadmap update:
 ✅ Phase 9  Investigation Agent
 ✅ Phase 10 Operational Intelligence, Notifications, and Audit
 ✅ Phase 11 UI/UX and Design System Refinement
-➡️ Phase 12 Security, Testing, Performance, and Hardening
+✅ Phase 12 Security, Testing, Performance, and Hardening
 ⬜ Phase 13 Deployment and Production Readiness
 ```
 
@@ -435,4 +435,84 @@ unaffected), and manual browser verification (citizen, admin, and district
 officer/inspector flows exercised end-to-end against a running backend at
 desktop/tablet/mobile viewport widths).
 
-The next implementation phase is **Phase 12**.
+Phase 12 audited Phases 1-11 as a security/performance review rather than
+adding product features. It confirmed the existing authorization
+architecture (server-derived district/inspector/citizen scope, no raw SQL,
+AI tools taking only pre-scoped objects) was already sound, then fixed real
+issues found by the audit:
+
+**Security:** added per-IP rate limiting on `/auth/login`, `/auth/register`,
+`/auth/refresh`, and `POST /complaints` (`app/core/rate_limit.py`, in-memory
+- see `docs/SECURITY_AND_RBAC.md` section 18 for the multi-worker
+limitation); closed a login timing side-channel that let an attacker
+distinguish "unknown email" from "wrong password" by response time; hardened
+evidence/RAG-document uploads with file-content magic-byte sniffing,
+filename sanitization, and bounded-memory reads (`app/utils/validators.py`,
+`app/utils/uploads.py`) - previously only the client-supplied `Content-Type`
+header was checked, and a raw client filename was interpolated into the
+storage key/URL; added a database-level unique constraint on
+`assignments.complaint_id` (a race between two concurrent assign-inspector
+requests could otherwise create two rows for one complaint and crash later
+reads - see `docs/DATABASE_SCHEMA.md` section 14); stopped vendor error text
+from Gemini reaching API clients verbatim; switched `gemini_api_key` and
+`supabase_service_role_key` to Pydantic `SecretStr`; added a global
+exception-handling middleware so every response (including genuine bugs)
+uses the same JSON error envelope, ordered correctly relative to
+`CORSMiddleware` so error responses still carry CORS headers for the React
+frontend (this ordering is a real Starlette subtlety - see the docstring on
+`error_handling_middleware` in `app/main.py`); added baseline security
+headers (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) to
+every response. Full findings list, including reviewed-but-not-changed
+items (stateless refresh tokens, the statewide business directory), are in
+`docs/SECURITY_AND_RBAC.md` section 18.
+
+**Performance:** fixed an N+1 query in the Inspector Assistant's and
+Investigation Agent's `get_evidence_analysis` tool (one query per evidence
+item on a case, now a single batched query -
+`evidence_analysis_repository.get_latest_by_evidence_ids`); added a
+process-local cache for RAG query embeddings so a repeated inspector
+question doesn't pay for a fresh Gemini embedding call every time
+(`app/rag/retrieval.py`); rewrote `analytics_repository.average_resolution_hours`
+(hit by every officer/admin dashboard load) to aggregate in SQL on
+PostgreSQL instead of pulling every resolved complaint's timestamps into
+Python, keeping the existing Python fallback for the SQLite test database;
+configured explicit SQLAlchemy connection-pool sizing
+(`app/core/database.py`) instead of relying on defaults; switched
+`storage_service.py`'s Supabase Storage calls from a fresh `httpx` client
+per request to one shared, connection-pooling client.
+
+**Reliability:** the assignment race fix above also covers a reliability
+gap (an unhandled `IntegrityError`/500 on the losing request, now a clean
+409 via `assignment_service.assign_inspector` catching it).
+
+**Testing:** added `app/tests/integration/test_hardening.py` (rate limiting,
+the global error envelope, CORS-on-error, security headers),
+`app/tests/unit/test_evidence_analysis_repository.py` (the batched N+1 fix),
+and expanded `app/tests/unit/test_evidence_validation.py` (magic-byte
+sniffing, filename sanitization, extension/type mismatch) and
+`app/tests/integration/test_assignments.py` (the concurrent-assignment race
+and the underlying database constraint). Full backend suite: 327 passing
+(up from 308). Frontend: 58 passing, `oxlint` clean, production `vite build`
+clean - no frontend code changes were needed (token storage in
+`localStorage`, JWT bearer auth, and the existing route guards were
+reviewed and found to already match the documented architecture; no XSS
+sinks such as `dangerouslySetInnerHTML` exist in the codebase).
+
+**Dependencies:** `pip-audit` found 66 known vulnerabilities across 6
+backend packages; `pyjwt`, `python-dotenv`, `python-multipart`, and `pypdf`
+were bumped to current patched versions (66 vulnerabilities in 6 packages ->
+10 in 2), re-verified against the full test suite. Two are left as
+documented technical debt rather than force-fixed in this pass: `starlette`
+is pinned transitively by `fastapi==0.115.6`'s `starlette<0.42.0` constraint
+- fixing it needs a coordinated `fastapi` upgrade spanning ~26 minor
+versions (0.115 -> 0.141+) with dedicated regression testing, which is
+out of scope for a contained hardening pass; `pytest` is a dev-only tool
+never shipped to production. `npm audit` found 0 vulnerabilities in
+frontend production dependencies; 5 (1 critical) exist only in `vitest`'s
+transitive dev-tooling chain (`esbuild`/`vite`, a dev-server-only issue),
+not shipped in the production build.
+
+No product features, UI redesign, or API contract changes were made in this
+phase, per the phase's own scope.
+
+The next implementation phase is **Phase 13**.

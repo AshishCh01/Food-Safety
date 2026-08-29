@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +12,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     database_url: str = "postgresql+psycopg2://postgres:password@localhost:5432/postgres"
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
+    db_pool_recycle_seconds: int = 1800
 
     cors_origins: str = "http://localhost:5173"
 
@@ -20,10 +24,10 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
 
     supabase_url: str = ""
-    supabase_service_role_key: str = ""
+    supabase_service_role_key: SecretStr = SecretStr("")
     supabase_storage_bucket: str = "complaint-evidence"
 
-    gemini_api_key: str = ""
+    gemini_api_key: SecretStr = SecretStr("")
     gemini_main_model: str = "gemini-3.7-flash"
     gemini_reasoning_model: str = "gemini-3.1-pro"
     gemini_embedding_model: str = "gemini-embedding-2-preview"

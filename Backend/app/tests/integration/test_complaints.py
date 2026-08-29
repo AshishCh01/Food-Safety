@@ -10,6 +10,10 @@ from app.tests.factories import (
     create_user,
 )
 
+# Real JPEG magic bytes so upload requests pass content-sniffing validation
+# (app/utils/validators.py) rather than only the declared Content-Type.
+FAKE_JPEG_BYTES = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01" + b"fake-image-bytes"
+
 
 def _setup(db_session: Session):
     division = create_division(db_session, name="Pune Division", code="PUN")
@@ -160,14 +164,14 @@ def test_upload_evidence_success(client: TestClient, db_session: Session, monkey
     response = client.post(
         f"/api/v1/complaints/{created['id']}/evidence",
         headers=auth_headers(citizen),
-        files={"file": ("photo.jpg", b"fake-image-bytes", "image/jpeg")},
+        files={"file": ("photo.jpg", FAKE_JPEG_BYTES, "image/jpeg")},
     )
 
     assert response.status_code == 201
     body = response.json()
     assert body["file_name"] == "photo.jpg"
     assert body["file_type"] == "image/jpeg"
-    assert body["file_size"] == len(b"fake-image-bytes")
+    assert body["file_size"] == len(FAKE_JPEG_BYTES)
     assert len(body["checksum"]) == 64
 
 
@@ -202,7 +206,7 @@ def test_list_evidence_returns_signed_urls(client: TestClient, db_session: Sessi
     client.post(
         f"/api/v1/complaints/{created['id']}/evidence",
         headers=auth_headers(citizen),
-        files={"file": ("photo.jpg", b"fake-image-bytes", "image/jpeg")},
+        files={"file": ("photo.jpg", FAKE_JPEG_BYTES, "image/jpeg")},
     )
 
     response = client.get(f"/api/v1/complaints/{created['id']}/evidence", headers=auth_headers(citizen))

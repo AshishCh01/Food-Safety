@@ -11,12 +11,16 @@ handle `google.genai.errors` directly - this is the one place API failures,
 timeouts, and rate limits are translated into a small, stable error set.
 """
 
+import logging
+
 from google.genai import errors as genai_errors
 from google.genai import types
 
 from app.core.config import get_settings
 from app.core.gemini import get_gemini_client
 from app.utils.exceptions import GeminiRateLimitedError, GeminiRequestError, GeminiUnavailableError
+
+logger = logging.getLogger(__name__)
 
 
 def generate_text(prompt: str, *, use_reasoning_model: bool = False) -> str:
@@ -116,4 +120,9 @@ def _normalize_api_error(exc: "genai_errors.APIError") -> Exception:
         return GeminiRateLimitedError()
     if isinstance(exc, genai_errors.ServerError):
         return GeminiUnavailableError()
-    return GeminiRequestError(exc.message or "The AI service could not process this request.")
+    # exc.message is vendor-generated text (safety-filter details, schema
+    # complaints, key/config state, ...) that we don't want to surface
+    # verbatim to an API client - it's logged here for operators instead.
+    # See docs/SECURITY_AND_RBAC.md section 11 ("safe error handling").
+    logger.warning("Gemini request rejected (code=%s): %s", exc.code, exc.message)
+    return GeminiRequestError()

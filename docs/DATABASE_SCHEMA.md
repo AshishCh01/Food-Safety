@@ -249,13 +249,27 @@ Purpose: assignment of cases to staff.
 Suggested columns:
 
 - `id`
-- `complaint_id`
+- `complaint_id` (unique - a complaint has at most one assignment; see
+  Phase 12 note below)
 - `assigned_to_staff_id`
 - `assigned_by_staff_id`
 - `assigned_at`
 - `due_at`
 - `status`
 - `notes`
+
+**Phase 12 hardening note:** `complaint_id` carries a database-level unique
+constraint (`uq_assignments_complaint_id`, added in
+`alembic/versions/a1b2c3d4e5f6_add_assignment_complaint_unique_constraint.py`),
+mirroring the pre-existing unique constraint on `inspections.complaint_id`.
+Without it, two concurrent `assign_inspector` requests for the same
+complaint could both pass the `complaint.status == VERIFIED` check before
+either committed, creating two `assignments` rows for one complaint;
+`assignment_repository.get_by_complaint_id`'s `scalar_one_or_none()` would
+then raise `MultipleResultsFound` on every later read.
+`assignment_service.assign_inspector` catches the resulting `IntegrityError`
+and raises the same `InvalidAssignmentError` used for the "not verified"
+case, so the loser of the race gets a clean 409 instead of a 500.
 
 ## 15. `inspections`
 

@@ -274,3 +274,11 @@ class NotificationNotFoundError(NotFoundError):
 
     def __init__(self, message: str = "Notification was not found.") -> None:
         super().__init__(message)
+
+
+class RateLimitExceededError(AppError):
+    code = "RATE_LIMIT_EXCEEDED"
+    status_code = 429
+
+    def __init__(self, message: str = "Too many requests. Please try again later.") -> None:
+        super().__init__(message)

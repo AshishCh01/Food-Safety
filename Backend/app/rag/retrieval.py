@@ -8,6 +8,7 @@ caller to handle without inventing an answer.
 """
 
 from dataclasses import dataclass
+from functools import lru_cache
 
 from sqlalchemy.orm import Session
 
@@ -30,6 +31,17 @@ class RetrievedChunk:
     score: float
 
 
+@lru_cache(maxsize=256)
+def _cached_query_embedding(query: str) -> tuple[float, ...]:
+    """Caches exact-match query embeddings so a repeated inspector question
+    (a common pattern - "what's the temperature rule for dairy?" asked by
+    many inspectors, or the same inspector across turns) doesn't pay for a
+    fresh Gemini embedding call every time. This is a small, in-process,
+    exact-string cache, not a semantic one - a differently-worded question
+    still gets its own embedding. Bounded to 256 entries per process."""
+    return tuple(ai_service.embed_text(query))
+
+
 def search(
     db: Session,
     query: str,
@@ -39,7 +51,7 @@ def search(
     business_type: str | None = None,
 ) -> list[RetrievedChunk]:
     settings = get_settings()
-    query_vector = ai_service.embed_text(query)
+    query_vector = list(_cached_query_embedding(query))
     results = rag_chunk_repository.search(
         db,
         query_vector,

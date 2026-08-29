@@ -454,6 +454,20 @@ yet:
   `services/ragDocumentService.js`). `pages/public/NotFound.jsx` was added
   for the `*` route. No backend files, API contracts, or database schema
   changed in this phase.
+- **Phase 12** (security/performance/reliability hardening - see
+  `docs/SECURITY_AND_RBAC.md` section 18 and `docs/DEVELOPMENT_ROADMAP.md`
+  Phase 12 for the full findings/fixes list) added two new `backend/app/`
+  modules not in the aspirational tree above: `core/rate_limit.py` (in-memory
+  per-IP rate limiting, applied to `/auth/login`, `/auth/register`,
+  `/auth/refresh`, `POST /complaints`) and `utils/uploads.py`
+  (bounded-memory multipart file reading). `utils/validators.py` gained
+  file-content magic-byte sniffing and filename sanitization.
+  `alembic/versions/a1b2c3d4e5f6_add_assignment_complaint_unique_constraint.py`
+  adds a unique constraint on `assignments.complaint_id`. New tests:
+  `app/tests/integration/test_hardening.py`,
+  `app/tests/unit/test_evidence_analysis_repository.py`. No new top-level
+  directories, no frontend changes, and no API contract/schema changes
+  beyond the `assignments.complaint_id` constraint above.
 
 Update this note (or remove it once the tree is fully current again) the
 next time a phase changes backend or frontend structure.

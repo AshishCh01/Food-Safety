@@ -103,9 +103,10 @@ def get_evidence_analysis(db: Session, inspection: Inspection) -> list[dict]:
     `inspection`. `inspection` must already be scoped to the requesting
     inspector by the caller (see inspection_service.get_inspection_for_inspector)."""
     items = evidence_repository.list_by_inspection(db, inspection.id)
+    latest_by_evidence_id = evidence_analysis_repository.get_latest_by_evidence_ids(db, [item.id for item in items])
     summaries = []
     for item in items:
-        analysis = evidence_analysis_repository.get_latest_by_evidence(db, item.id)
+        analysis = latest_by_evidence_id.get(item.id)
         if analysis is None or analysis.status != EvidenceAnalysisStatus.COMPLETED:
             continue
         summaries.append(

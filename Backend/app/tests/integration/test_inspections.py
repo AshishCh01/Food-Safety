@@ -135,7 +135,7 @@ def test_upload_inspection_evidence(client: TestClient, db_session: Session, mon
     response = client.post(
         f"/api/v1/inspector/inspections/{inspection.id}/evidence",
         headers=auth_headers(ctx["inspector"]),
-        files={"file": ("site.jpg", b"fake-image-bytes", "image/jpeg")},
+        files={"file": ("site.jpg", b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01fake-image-bytes", "image/jpeg")},
     )
 
     assert response.status_code == 201

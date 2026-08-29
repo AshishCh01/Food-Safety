@@ -23,4 +23,4 @@ def get_gemini_client() -> genai.Client:
     calls made through the client will only fail once actually invoked.
     """
     settings = get_settings()
-    return genai.Client(api_key=settings.gemini_api_key or "unconfigured")
+    return genai.Client(api_key=settings.gemini_api_key.get_secret_value() or "unconfigured")

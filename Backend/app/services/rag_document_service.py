@@ -24,14 +24,14 @@ def upload_document(
     filename: str,
     content_type: str,
 ) -> RagDocument:
-    validate_rag_document_file(filename, content_type, len(file_bytes))
+    safe_filename = validate_rag_document_file(filename, content_type, len(file_bytes), file_bytes[:16])
 
     checksum = hashlib.sha256(file_bytes).hexdigest()
     if rag_document_repository.get_by_checksum(db, checksum) is not None:
         raise RagDocumentDuplicateError()
 
     settings = get_settings()
-    storage_path = f"{payload.document_type.value}/{uuid.uuid4()}_{filename}"
+    storage_path = f"{payload.document_type.value}/{uuid.uuid4()}_{safe_filename}"
     storage_service.upload_file(settings.rag_storage_bucket, storage_path, file_bytes, content_type)
 
     document = RagDocument(
@@ -42,7 +42,7 @@ def upload_document(
         effective_date=payload.effective_date,
         source_url=payload.source_url,
         storage_path=storage_path,
-        original_filename=filename,
+        original_filename=safe_filename,
         file_type=content_type,
         checksum=checksum,
         business_type=payload.business_type,

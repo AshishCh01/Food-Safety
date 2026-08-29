@@ -13,8 +13,11 @@ class Assignment(Base):
     __tablename__ = "assignments"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    # unique=True: a complaint has at most one assignment (see
+    # alembic/versions/a1b2c3d4e5f6_add_assignment_complaint_unique_constraint.py
+    # for why this is enforced at the database level, not just in application code).
     complaint_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("complaints.id", ondelete="CASCADE"), nullable=False, index=True
+        Uuid, ForeignKey("complaints.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
     )
     assigned_to_staff_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("staff_profiles.id", ondelete="RESTRICT"), nullable=False, index=True

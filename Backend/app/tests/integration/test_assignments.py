@@ -1,6 +1,9 @@
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.repositories import assignment_repository
+from app.services import assignment_service
 from app.tests.factories import (
     auth_headers,
     create_assignment,
@@ -12,6 +15,7 @@ from app.tests.factories import (
     create_user,
 )
 from app.utils.enums import ComplaintStatus, UserRole
+from app.utils.exceptions import InvalidAssignmentError
 
 
 def _setup(db_session: Session, *, complaint_status: ComplaintStatus = ComplaintStatus.VERIFIED):
@@ -112,6 +116,59 @@ def test_double_assignment_is_blocked(client: TestClient, db_session: Session) -
         f"/api/v1/officer/complaints/{ctx['complaint'].id}/assign", json=payload, headers=auth_headers(ctx["pune_officer"])
     )
     assert second.status_code == 409
+
+
+def test_assignments_complaint_id_is_unique_at_the_database_level(db_session: Session) -> None:
+    """Two assignment rows for the same complaint must never both exist -
+    see alembic/versions/a1b2c3d4e5f6_add_assignment_complaint_unique_constraint.py.
+    Without this constraint, assignment_repository.get_by_complaint_id's
+    scalar_one_or_none() would raise MultipleResultsFound on every later
+    read of that complaint's assignment."""
+    from sqlalchemy.exc import IntegrityError
+
+    ctx = _setup(db_session)
+    assignment_repository.create(
+        db_session,
+        complaint_id=ctx["complaint"].id,
+        assigned_to_staff_id=ctx["pune_inspector_profile"].id,
+        assigned_by_staff_id=ctx["pune_officer_profile"].id,
+    )
+    db_session.commit()
+
+    with pytest.raises(IntegrityError):
+        # assignment_repository.create() flushes internally, so the unique
+        # constraint violation surfaces here rather than at a later commit().
+        assignment_repository.create(
+            db_session,
+            complaint_id=ctx["complaint"].id,
+            assigned_to_staff_id=ctx["pune_inspector_profile"].id,
+            assigned_by_staff_id=ctx["pune_officer_profile"].id,
+        )
+
+
+def test_assign_inspector_handles_concurrent_assignment_race(db_session: Session) -> None:
+    """Simulates two officers assigning an inspector to the same complaint at
+    once: both requests can pass the `complaint.status == VERIFIED` check
+    before either commits (docs/SECURITY_AND_RBAC.md section 5, defense in
+    depth still relies on the database's own constraint as the last line).
+    This creates a competing assignment row directly (bypassing the service,
+    the way a concurrent request's already-committed transaction would look
+    from this request's point of view) while the complaint is still
+    VERIFIED, then asserts assign_inspector fails cleanly with a domain
+    error instead of an unhandled IntegrityError/500."""
+    ctx = _setup(db_session)
+    create_assignment(db_session, ctx["complaint"], ctx["pune_inspector_profile"], ctx["pune_officer_profile"])
+    assert ctx["complaint"].status == ComplaintStatus.VERIFIED  # unchanged - simulating the race window
+
+    with pytest.raises(InvalidAssignmentError):
+        assignment_service.assign_inspector(
+            db_session,
+            ctx["pune_officer_profile"],
+            ctx["complaint"],
+            inspector_staff_id=ctx["pune_inspector_profile"].id,
+            due_at=None,
+            notes=None,
+        )
 
 
 def test_officer_from_other_district_cannot_view_assignment(client: TestClient, db_session: Session) -> None:

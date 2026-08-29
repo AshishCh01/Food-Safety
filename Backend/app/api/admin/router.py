@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.dependencies import require_admin
 from app.models.user import User
@@ -23,6 +24,7 @@ from app.schemas.user import PaginatedUsers, UserStatusUpdate, UserSummary
 from app.services import analytics_service, audit_log_service, district_service, rag_document_service, staff_service
 from app.utils.enums import RagDocumentStatus, RagDocumentType, UserRole
 from app.utils.exceptions import NotFoundError
+from app.utils.uploads import read_upload_bounded
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -175,7 +177,8 @@ async def upload_rag_document(
         business_type=business_type,
         jurisdiction=jurisdiction,
     )
-    file_bytes = await file.read()
+    max_bytes = get_settings().rag_max_upload_size_mb * 1024 * 1024
+    file_bytes = await read_upload_bounded(file, max_bytes)
     document = rag_document_service.upload_document(
         db,
         current_user,

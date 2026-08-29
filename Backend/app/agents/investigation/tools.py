@@ -155,9 +155,10 @@ def get_evidence_analysis(db: Session, complaint: Complaint) -> list[dict]:
     `complaint`. `complaint` must already be scoped to the requesting officer
     by the caller (see complaint_service.get_complaint_for_officer)."""
     items = evidence_repository.list_by_complaint(db, complaint.id)
+    latest_by_evidence_id = evidence_analysis_repository.get_latest_by_evidence_ids(db, [item.id for item in items])
     summaries = []
     for item in items:
-        analysis = evidence_analysis_repository.get_latest_by_evidence(db, item.id)
+        analysis = latest_by_evidence_id.get(item.id)
         if analysis is None or analysis.status != EvidenceAnalysisStatus.COMPLETED:
             continue
         summaries.append(

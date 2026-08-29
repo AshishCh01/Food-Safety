@@ -43,7 +43,7 @@ def upload_evidence(
     if complaint.status in LOCKED_STATUSES:
         raise ConflictError("Evidence cannot be added to a complaint in this status.")
 
-    validate_evidence_file(filename, content_type, len(file_bytes))
+    safe_filename = validate_evidence_file(filename, content_type, len(file_bytes), file_bytes[:16])
     validate_coordinates(
         float(latitude) if latitude is not None else None,
         float(longitude) if longitude is not None else None,
@@ -52,7 +52,7 @@ def upload_evidence(
     settings = get_settings()
     checksum = hashlib.sha256(file_bytes).hexdigest()
     folder = f"inspections/{inspection_id}" if inspection_id else f"evidence/{complaint.id}"
-    storage_path = f"{folder}/{uuid.uuid4()}_{filename}"
+    storage_path = f"{folder}/{uuid.uuid4()}_{safe_filename}"
     storage_service.upload_file(settings.supabase_storage_bucket, storage_path, file_bytes, content_type)
 
     return evidence_repository.create(
@@ -62,7 +62,7 @@ def upload_evidence(
         uploaded_by_user_id=uploaded_by_user_id,
         storage_bucket=settings.supabase_storage_bucket,
         storage_path=storage_path,
-        file_name=filename,
+        file_name=safe_filename,
         file_type=content_type,
         file_size=len(file_bytes),
         checksum=checksum,

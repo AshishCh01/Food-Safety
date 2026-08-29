@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import require_citizen
+from app.core.rate_limit import complaint_creation_rate_limiter
 from app.models.user import User
 from app.schemas.complaint import ComplaintCreateRequest, ComplaintRead, PaginatedComplaints
 from app.schemas.complaint_status_history import ComplaintStatusHistoryRead
@@ -13,11 +14,18 @@ from app.schemas.evidence import EvidenceRead
 from app.repositories import complaint_status_history_repository
 from app.services import complaint_service, evidence_service
 from app.utils.enums import ComplaintStatus
+from app.utils.uploads import read_upload_bounded
+from app.utils.validators import MAX_EVIDENCE_FILE_SIZE_BYTES
 
 router = APIRouter(prefix="/complaints", tags=["citizen-complaints"], dependencies=[Depends(require_citizen)])
 
 
-@router.post("", response_model=ComplaintRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ComplaintRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(complaint_creation_rate_limiter)],
+)
 def create_complaint(
     payload: ComplaintCreateRequest,
     current_user: User = Depends(require_citizen),
@@ -84,7 +92,7 @@ async def upload_evidence(
     db: Session = Depends(get_db),
 ) -> EvidenceRead:
     complaint = complaint_service.get_complaint_for_citizen(db, current_user.id, complaint_id)
-    file_bytes = await file.read()
+    file_bytes = await read_upload_bounded(file, MAX_EVIDENCE_FILE_SIZE_BYTES)
     evidence = evidence_service.upload_evidence(
         db,
         complaint=complaint,

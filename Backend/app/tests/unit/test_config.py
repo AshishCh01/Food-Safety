@@ -20,5 +20,13 @@ def test_gemini_and_supabase_settings_have_sane_defaults() -> None:
     assert settings.gemini_main_model == "gemini-3.7-flash"
     assert settings.gemini_reasoning_model == "gemini-3.1-pro"
     assert settings.gemini_embedding_model == "gemini-embedding-2-preview"
-    assert settings.gemini_api_key == ""
+    assert settings.gemini_api_key.get_secret_value() == ""
     assert settings.supabase_storage_bucket == "complaint-evidence"
+
+
+def test_secrets_are_not_exposed_in_repr() -> None:
+    settings = Settings(_env_file=None, gemini_api_key="super-secret-key")
+
+    assert "super-secret-key" not in repr(settings)
+    assert "super-secret-key" not in str(settings)
+    assert settings.gemini_api_key.get_secret_value() == "super-secret-key"

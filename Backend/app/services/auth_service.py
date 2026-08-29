@@ -2,7 +2,14 @@ import uuid
 
 from sqlalchemy.orm import Session
 
-from app.core.security import TokenType, create_access_token, create_refresh_token, decode_token, hash_password, verify_password
+from app.core.security import (
+    TokenType,
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
 from app.models.user import User
 from app.repositories import staff_repository, user_repository
 from app.schemas.auth import AuthenticatedUser, LoginResponse, RegisterRequest, TokenResponse
@@ -24,9 +31,19 @@ def register_citizen(db: Session, payload: RegisterRequest) -> User:
     )
 
 
+# A precomputed bcrypt hash of an unguessable placeholder, used only to give
+# "unknown email" the same bcrypt-comparison cost as "known email, wrong
+# password" - otherwise a nonexistent email short-circuits before
+# verify_password runs, letting an attacker enumerate registered accounts by
+# measuring response time.
+_DUMMY_PASSWORD_HASH = hash_password("not-a-real-password-used-only-for-timing-parity")
+
+
 def authenticate(db: Session, email: str, password: str) -> User:
     user = user_repository.get_by_email(db, email)
-    if user is None or not verify_password(password, user.password_hash):
+    password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
+    password_matches = verify_password(password, password_hash)
+    if user is None or not password_matches:
         raise InvalidCredentialsError()
     if not user.is_active:
         raise InactiveAccountError()

@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.assignment import Assignment
@@ -34,14 +35,22 @@ def assign_inspector(
     ):
         raise NotFoundError("Inspector was not found in your district.")
 
-    assignment = assignment_repository.create(
-        db,
-        complaint_id=complaint.id,
-        assigned_to_staff_id=inspector.id,
-        assigned_by_staff_id=officer.id,
-        due_at=due_at,
-        notes=notes,
-    )
+    try:
+        assignment = assignment_repository.create(
+            db,
+            complaint_id=complaint.id,
+            assigned_to_staff_id=inspector.id,
+            assigned_by_staff_id=officer.id,
+            due_at=due_at,
+            notes=notes,
+        )
+    except IntegrityError as exc:
+        # Two concurrent assign-inspector requests for the same complaint
+        # both passed the VERIFIED check above before either committed; the
+        # database's unique constraint on assignments.complaint_id is the
+        # actual source of truth here (see the migration that added it).
+        db.rollback()
+        raise InvalidAssignmentError("This complaint has already been assigned to an inspector.") from exc
 
     audit_log_repository.record(
         db,

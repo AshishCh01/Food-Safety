@@ -30,6 +30,8 @@ from app.schemas.inspection import (
 from app.services import assignment_service, assistant_service, evidence_service, inspection_service
 from app.utils.enums import AssignmentStatus, InspectionStatus
 from app.utils.exceptions import EvidenceAnalysisNotFoundError
+from app.utils.uploads import read_upload_bounded
+from app.utils.validators import MAX_EVIDENCE_FILE_SIZE_BYTES
 
 router = APIRouter(prefix="/inspector", tags=["inspector"], dependencies=[Depends(require_inspector)])
 
@@ -144,7 +146,7 @@ async def upload_inspection_evidence(
     db: Session = Depends(get_db),
 ) -> EvidenceRead:
     inspection = inspection_service.get_inspection_for_inspector(db, staff.id, inspection_id)
-    file_bytes = await file.read()
+    file_bytes = await read_upload_bounded(file, MAX_EVIDENCE_FILE_SIZE_BYTES)
     evidence = evidence_service.upload_evidence(
         db,
         complaint=inspection.complaint,

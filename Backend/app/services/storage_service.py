@@ -6,24 +6,35 @@ are isolated behind `upload_file`/`create_signed_url` so callers (and tests)
 can monkeypatch them without hitting the network.
 """
 
+from functools import lru_cache
+
 import httpx
 
 from app.core.config import get_settings
 from app.utils.exceptions import EvidenceDownloadError, EvidenceUploadError
 
 
+@lru_cache
+def _client() -> httpx.Client:
+    """A single shared, connection-pooling client rather than a new
+    connection per call - every upload/download/sign operation otherwise
+    paid a fresh TCP+TLS handshake to Supabase Storage on every request."""
+    return httpx.Client(timeout=30.0)
+
+
 def _headers() -> dict[str, str]:
     settings = get_settings()
+    key = settings.supabase_service_role_key.get_secret_value()
     return {
-        "Authorization": f"Bearer {settings.supabase_service_role_key}",
-        "apikey": settings.supabase_service_role_key,
+        "Authorization": f"Bearer {key}",
+        "apikey": key,
     }
 
 
 def upload_file(bucket: str, path: str, content: bytes, content_type: str) -> str:
     settings = get_settings()
     url = f"{settings.supabase_url}/storage/v1/object/{bucket}/{path}"
-    response = httpx.post(
+    response = _client().post(
         url,
         content=content,
         headers={**_headers(), "Content-Type": content_type},
@@ -40,7 +51,7 @@ def download_file(bucket: str, path: str) -> bytes:
     service-role-key access as upload_file."""
     settings = get_settings()
     url = f"{settings.supabase_url}/storage/v1/object/{bucket}/{path}"
-    response = httpx.get(url, headers=_headers(), timeout=30.0)
+    response = _client().get(url, headers=_headers(), timeout=30.0)
     if response.status_code != 200:
         raise EvidenceDownloadError(f"Storage download failed with status {response.status_code}.")
     return response.content
@@ -49,7 +60,7 @@ def download_file(bucket: str, path: str) -> bytes:
 def create_signed_url(bucket: str, path: str, expires_in: int = 300) -> str:
     settings = get_settings()
     url = f"{settings.supabase_url}/storage/v1/object/sign/{bucket}/{path}"
-    response = httpx.post(url, json={"expiresIn": expires_in}, headers=_headers(), timeout=15.0)
+    response = _client().post(url, json={"expiresIn": expires_in}, headers=_headers(), timeout=15.0)
     if response.status_code != 200:
         raise EvidenceUploadError(f"Could not create a signed URL (status {response.status_code}).")
 
