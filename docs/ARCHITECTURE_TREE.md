@@ -28,6 +28,7 @@ Food Safety/
 ├── .gitignore
 ├── .env.example
 ├── CLAUDE.md
+├── render.yaml
 ├── docker-compose.yml
 ├── docker-compose.prod.yml
 ├── Makefile
@@ -39,6 +40,7 @@ Food Safety/
 │   ├── API_ARCHITECTURE.md
 │   ├── AI_AGENTS_ARCHITECTURE.md
 │   ├── RAG_ARCHITECTURE.md
+│   ├── DEPLOYMENT.md
 │   ├── SECURITY_AND_RBAC.md
 │   ├── DEVELOPMENT_ROADMAP.md
 │   └── ARCHITECTURE_TREE.md
@@ -496,6 +498,28 @@ yet:
   the script is intended to be invoked by cron/Task
   Scheduler/scheduled-CI, external to the application process. New tests:
   `app/tests/unit/test_refresh_session_cleanup.py`.
+
+- **Phase 13** (Render demo deployment - see `docs/DEPLOYMENT.md` and
+  `docs/DEVELOPMENT_ROADMAP.md` Phase 13) added `render.yaml` at the
+  repository root (a Render Blueprint provisioning `food-safety-backend`, a
+  Web Service, and `food-safety-frontend`, a Static Site, both Free Tier,
+  neither Docker-based) and `.github/workflows/cleanup-refresh-sessions.yml`
+  (a scheduled GitHub Actions workflow running
+  `scripts/cleanup_refresh_sessions.py` daily, since Render's Cron Job
+  service type is a paid feature - see `docs/SECURITY_AND_RBAC.md` section
+  20.4). This is the only file under `.github/workflows/` that actually
+  exists; the aspirational tree above also shows `frontend-ci.yml` and
+  `backend-ci.yml`, which were not built in this phase (no CI test gate
+  currently runs on push - see `docs/DEPLOYMENT.md` section 11's known
+  limitations) - `deploy.yml` doesn't exist either, since deployment is
+  handled by Render's own Git-triggered builds via `render.yaml`, not a
+  GitHub Actions deploy step. `Backend/.env.example` gained one line,
+  `RAG_STORAGE_BUCKET` - an existing `Settings` field
+  (`app/core/config.py`) that was already read by
+  `app/services/rag_document_service.py` but not documented alongside its
+  sibling `SUPABASE_STORAGE_BUCKET`. No backend or frontend application
+  code changed - this phase is deployment configuration and documentation
+  only (`docs/DEPLOYMENT.md`, new).
 
 Update this note (or remove it once the tree is fully current again) the
 next time a phase changes backend or frontend structure.

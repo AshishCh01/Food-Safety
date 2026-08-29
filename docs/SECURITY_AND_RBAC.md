@@ -491,9 +491,13 @@ deployment environment already provides:
 - **Local/VM deployment:** a daily cron entry, e.g.
   `0 3 * * * cd /path/to/backend && venv/bin/python -m scripts.cleanup_refresh_sessions`.
 - **Windows:** a daily Task Scheduler entry running the same command.
-- **Containerized/CI-driven deployment (Phase 13):** a scheduled CI/CD job
-  or a one-shot container run on a timer, invoking the same script inside
-  the backend image - no new service or long-running process to deploy.
+- **Render demo deployment (Phase 13):** a scheduled GitHub Actions workflow,
+  `.github/workflows/cleanup-refresh-sessions.yml`, running daily against the
+  production `DATABASE_URL` (set as a repository secret). Render's own Cron
+  Job service type requires a paid plan, incompatible with this project's
+  Free Tier target, so GitHub Actions' free scheduled workflows are used
+  instead - no new always-on service, no Redis/Celery. See
+  `docs/DEPLOYMENT.md` section 7 for the full setup.
 
 Daily is a reasonable default frequency given 7/90-day retention windows -
 there is no urgency to clean up more often, since eligible rows are already

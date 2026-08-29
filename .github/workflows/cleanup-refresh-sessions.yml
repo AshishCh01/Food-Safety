@@ -1,0 +1,44 @@
+name: Cleanup expired refresh sessions
+
+# Runs Backend/scripts/cleanup_refresh_sessions.py on a daily schedule
+# against the production Supabase database. This is the demo deployment's
+# scheduling mechanism for that maintenance task - see
+# docs/SECURITY_AND_RBAC.md section 20.4 and docs/DEPLOYMENT.md
+# "Refresh-session cleanup". Render's own Cron Job service type is a paid
+# feature (not available on the Free Tier this project targets), and this
+# project deliberately has no Celery/Redis/in-process scheduler, so a
+# scheduled GitHub Actions workflow is the lowest-friction option that adds
+# no new always-on infrastructure.
+
+on:
+  schedule:
+    # 03:00 UTC daily - see the script's docstring for why daily is enough
+    # given the 7/90-day retention windows.
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run cleanup script
+        env:
+          # The Supabase PostgreSQL connection string - the only setting
+          # this script needs. Configure it once as a GitHub Actions
+          # repository secret (Settings -> Secrets and variables -> Actions),
+          # using the same connection string set on the Render backend
+          # service's DATABASE_URL. Never commit it to source control.
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python -m scripts.cleanup_refresh_sessions

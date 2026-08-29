@@ -264,12 +264,83 @@ Do not log passwords, access tokens, private evidence contents, or sensitive sec
 
 ## 14. Deployment
 
-Development:
+### Demo deployment target
+
+The current target is a simple Render Free Tier deployment for demonstration and evaluation. Docker is not required for the target deployment.
 
 ```text
-React container
-FastAPI container
-PostgreSQL via Supabase
+                    Internet
+                       |
+             +---------+---------+
+             |                   |
+             v                   v
+      Render Static Site    Render Web Service
+       React/Vite build        FastAPI
+             |                   |
+             +---------+---------+
+                       |
+                       v
+                  Supabase
+          +------------+-------------+
+          |            |             |
+      PostgreSQL    Storage      PostGIS/pgvector
+                       
+                       +
+                       v
+                  Gemini API
 ```
 
-Production should separate secrets from source control and use HTTPS. Docker is the standard local and deployment packaging mechanism.
+### Frontend
+
+Deploy the Vite production build as a Render Static Site. The frontend receives the public backend base URL through the appropriate build-time environment variable. No Supabase service-role secret is exposed to the frontend.
+
+### Backend
+
+Deploy FastAPI as a Render Web Service using native Python build/start commands. The backend connects to Supabase PostgreSQL/Storage and the Gemini API through server-side environment variables.
+
+Typical runtime command:
+
+```text
+uvicorn app.main:app --host 0.0.0.0 --port $PORT
+```
+
+The exact Render build/start configuration should match the repository's actual package manager and dependency files.
+
+### Secrets and configuration
+
+Production secrets must remain outside source control, including:
+
+- Supabase service-role credentials
+- database credentials where used
+- Gemini API key
+- JWT/authentication secrets
+
+### Database and migrations
+
+Run Alembic migrations from a trusted deployment environment against the Supabase database before or as part of release preparation. The deployed application must point to the latest verified migration head.
+
+### Rate limiting
+
+The current demo deployment intentionally uses the existing in-memory, single-process rate limiter. This is acceptable for a single Render Web Service instance but is not a distributed rate-limiting solution. Redis is not required for the current demo target.
+
+### Refresh-session maintenance
+
+The refresh-session cleanup remains a standalone script
+(`scripts/cleanup_refresh_sessions.py`) and is run through an external
+scheduler rather than an in-process application scheduler. The demo
+deployment schedules it with `.github/workflows/cleanup-refresh-sessions.yml`
+(a daily GitHub Actions workflow), since Render's own Cron Job service type
+requires a paid plan. See `docs/SECURITY_AND_RBAC.md` section 20.4 and
+`docs/DEPLOYMENT.md` section 7.
+
+### Docker
+
+Docker is not part of the target Render deployment architecture. Existing Docker files, if retained for local experimentation, must not be treated as required deployment infrastructure.
+
+### Production baseline
+
+The demo deployment should still use HTTPS, production CORS restrictions, secure secret handling, health checks, and production-safe error responses.
+
+### Reference
+
+The full deployment walkthrough - environment variable reference, Supabase/PostGIS/pgvector setup, Storage bucket configuration, and the production smoke-test checklist - lives in `docs/DEPLOYMENT.md`. The repository root's `render.yaml` is the Render Blueprint (infrastructure-as-code) that provisions both services described above.

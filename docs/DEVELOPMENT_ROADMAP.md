@@ -45,7 +45,7 @@ Build:
 - SQLAlchemy configuration
 - Alembic configuration
 - Supabase PostgreSQL connection
-- Docker development environment
+- local development environment
 - health endpoint
 - base logging/configuration
 - baseline tests
@@ -57,7 +57,7 @@ frontend -> runs
 backend -> runs
 backend -> database connection works
 alembic -> migration works
-Docker -> services start successfully
+frontend/backend local services -> start successfully
 ```
 
 ## 5. Phase 2 — Authentication, RBAC, and Maharashtra District Structure
@@ -311,24 +311,41 @@ Completion:
 
 Critical security tests pass, privileged secrets are not committed, and major permission boundaries have automated coverage.
 
-## 16. Phase 13 — Deployment and Production Readiness
+## 16. Phase 13 — Render Demo Deployment and Production Readiness
 
-Build:
+Deployment target:
 
-- production Docker images
-- production environment configuration
-- CI/CD
-- HTTPS
-- database migration deployment process
-- structured logging
-- monitoring/health checks
-- backup/recovery plan
-- deployment documentation
-- production smoke-test checklist
+- Render Free Tier for the frontend and backend demo services
+- No Docker or Docker Compose required for this deployment
+- Supabase remains the managed PostgreSQL/Storage/PostGIS/pgvector platform
+- Gemini API remains the external AI provider
+
+Build/prepare:
+
+- Render Static Site configuration for the React/Vite frontend
+- Render Web Service configuration for the FastAPI backend
+- native Render build/start commands (no Dockerfiles required for deployment)
+- production environment variables and secret handling
+- production CORS configuration
+- Supabase database migration process using Alembic
+- Supabase Storage configuration and private-bucket access
+- Gemini API configuration
+- health/readiness checks suitable for Render
+- structured logging and useful runtime diagnostics
+- frontend/backend API routing and deployment configuration
+- refresh-session cleanup script scheduling strategy compatible with the demo deployment
+- deployment documentation and smoke-test checklist
+
+Constraints:
+
+- Do not introduce Redis for the demo deployment.
+- Keep the current in-memory rate limiter and document that it is single-process.
+- Do not introduce AWS/GCP-specific infrastructure.
+- Docker is optional for local experimentation but is not part of the target Render deployment.
 
 Completion:
 
-The application can be deployed reproducibly from a clean environment and the production migration/runtime process is documented.
+The application can be deployed reproducibly to Render Free Tier from the repository using native build/start commands, connects securely to Supabase and Gemini, applies Alembic migrations correctly, and passes a documented production smoke test.
 
 ## 17. Git Strategy
 
@@ -416,7 +433,7 @@ As of the current roadmap update:
 ✅ Phase 10 Operational Intelligence, Notifications, and Audit
 ✅ Phase 11 UI/UX and Design System Refinement
 ✅ Phase 12 Security, Testing, Performance, and Hardening
-⬜ Phase 13 Deployment and Production Readiness
+✅ Phase 13 Render Demo Deployment and Production Readiness
 ```
 
 Phase 11 delivered a Tailwind CSS v4 design system (`frontend/src/components/ui/`),
@@ -582,4 +599,55 @@ nulling, and service-level looping). Full backend suite: 358 passing (up
 from 348); no frontend changes were needed. No new dependencies - `pip
 check` and `pip-audit` unaffected.
 
-The next implementation phase is **Phase 13**.
+**Phase 13** prepared the application for a reproducible Render Free Tier
+demo deployment - configuration and documentation only, no product features
+and no application code changes. Added `render.yaml` (repository root), a
+Render Blueprint provisioning `food-safety-backend` (a native-Python Web
+Service - no Dockerfile involved in the deploy path) and `food-safety-frontend`
+(a Static Site built from the Vite production build, with the `/* ->
+/index.html` rewrite rule the client-side-routed SPA needs so deep links and
+hard refreshes don't 404). Alembic migrations run via `alembic upgrade head`
+chained into the start command rather than as a Render "pre-deploy command",
+since that feature requires a paid plan; `alembic upgrade head` is idempotent
+so re-running it on every boot is safe.
+
+Added `.github/workflows/cleanup-refresh-sessions.yml`, a scheduled (daily)
+GitHub Actions workflow that runs the existing
+`scripts/cleanup_refresh_sessions.py` against the production database -
+Render's own Cron Job service type is a paid feature, so this was the
+lowest-friction way to keep the Phase 12 refresh-session cleanup task
+scheduled without introducing Redis, Celery, or any always-on process (see
+`docs/SECURITY_AND_RBAC.md` section 20.4).
+
+Reviewed `Backend/.env.example` against `app/core/config.py` and found one
+real gap: `RAG_STORAGE_BUCKET` was already a live setting (read by
+`app/services/rag_document_service.py`) but undocumented alongside its
+sibling `SUPABASE_STORAGE_BUCKET` - added the one missing line. Verified
+(without code changes) that CORS origins, the `/health` endpoint's database
+check, the global JSON error envelope, `$PORT`-based startup, and
+Supabase/Gemini connectivity are all already environment-driven with no
+hard-coded deployment-specific values, and that no secret is ever exposed to
+the frontend bundle (`VITE_API_URL` is the only frontend env var; the
+Supabase service-role key and Gemini key remain backend-only `SecretStr`
+values per the Phase 12 hardening work).
+
+New `docs/DEPLOYMENT.md` is the full walkthrough: prerequisites, the
+Blueprint vs. manual setup paths, a complete environment-variable reference
+per service, Supabase/PostGIS/pgvector setup, the two required private
+Storage buckets, the refresh-session cleanup workflow, a production baseline
+checklist, and a smoke-test checklist (backend health/auth, frontend SPA
+routing/auth/refresh-rotation/logout/RBAC/responsive behavior, and a full
+citizen-to-resolution workflow exercising both AI agents and the RAG
+Inspector Assistant end-to-end against the deployed services).
+`docs/SYSTEM_ARCHITECTURE.md` section 14 and `docs/SECURITY_AND_RBAC.md`
+section 20.4 were updated to point at the concrete files instead of
+describing the deployment only in the abstract; `docs/ARCHITECTURE_TREE.md`
+gained a matching Build Status Note entry.
+
+Verified via the existing test suites (no application code changed): full
+backend `pytest` (358 passing) and a production `npm run build` (clean,
+`dist/` output matching `render.yaml`'s `staticPublishPath`). Deployment
+itself (creating the actual Render/Supabase/GitHub resources and running the
+smoke-test checklist against them) requires live account access this
+environment does not have, and is the next action for whoever operates the
+Render/Supabase/GitHub accounts, following `docs/DEPLOYMENT.md` directly.
