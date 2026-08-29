@@ -43,9 +43,8 @@ def list_logs(
     page_size: int = 20,
 ) -> tuple[list[AuditLog], int]:
     """Read-only, filterable listing for the admin audit-log view. There is
-    intentionally no corresponding update/delete function - see
-    app.tests.unit.test_audit_log_repository for the immutability check this
-    absence enforces."""
+    intentionally no corresponding update/delete function - audit log rows
+    must remain immutable."""
     stmt = select(AuditLog).options(joinedload(AuditLog.actor))
     if actor_user_id is not None:
         stmt = stmt.where(AuditLog.actor_user_id == actor_user_id)

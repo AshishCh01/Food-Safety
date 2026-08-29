@@ -25,13 +25,6 @@ uvicorn app.main:app --reload
 
 Health check: `GET http://localhost:8000/health`
 
-Run tests:
-
-```bash
-cd Backend
-pytest
-```
-
 ## Frontend
 
 ```bash
@@ -39,13 +32,6 @@ cd Frontend
 npm install
 cp .env.example .env
 npm run dev
-```
-
-Run tests:
-
-```bash
-cd Frontend
-npm test
 ```
 
 ## Docker (local experimentation only)
