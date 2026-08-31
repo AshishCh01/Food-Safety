@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr = SecretStr("")
     gemini_main_model: str = "gemini-3.7-flash"
     gemini_reasoning_model: str = "gemini-3.1-pro"
-    gemini_embedding_model: str = "gemini-embedding-2-preview"
+    gemini_embedding_model: str = "gemini-embedding-2"
     gemini_embedding_dimensions: int = 768
     gemini_request_timeout_seconds: float = 20.0
 

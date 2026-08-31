@@ -59,3 +59,8 @@ def update(db: Session, document: RagDocument) -> RagDocument:
     db.commit()
     db.refresh(document)
     return document
+
+
+def delete(db: Session, document: RagDocument) -> None:
+    db.delete(document)
+    db.commit()

@@ -6,6 +6,7 @@ import Alert from '../../components/ui/Alert';
 import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
+import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorState from '../../components/ui/ErrorState';
 import FormField from '../../components/ui/FormField';
@@ -19,10 +20,13 @@ import { formatDate } from '../../utils/formatters';
 import { RAG_DOCUMENT_STATUSES, RAG_DOCUMENT_TYPES, configFor } from '../../utils/statusConfig';
 import {
   deactivateRagDocument,
+  deleteRagDocument,
   ingestRagDocument,
   listRagDocuments,
   uploadRagDocument,
 } from '../../services/ragDocumentService';
+
+const DELETABLE_STATUSES = ['pending', 'failed'];
 
 const PAGE_SIZE = 20;
 
@@ -49,6 +53,8 @@ function RagDocuments() {
   const [uploadError, setUploadError] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [busyDocumentId, setBusyDocumentId] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   function load() {
     listRagDocuments(getAccessToken(), { status: statusFilter || undefined, page, pageSize: PAGE_SIZE })
@@ -101,6 +107,21 @@ function RagDocuments() {
       setError(err.message);
     } finally {
       setBusyDocumentId(null);
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteRagDocument(deleteTarget.id, getAccessToken());
+      setDeleteTarget(null);
+      load();
+    } catch (err) {
+      setError(err.message);
+      setDeleteTarget(null);
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -224,6 +245,11 @@ function RagDocuments() {
                           Deactivate
                         </Button>
                       )}
+                      {DELETABLE_STATUSES.includes(doc.status) && (
+                        <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(doc)}>
+                          Delete
+                        </Button>
+                      )}
                     </div>
                   </Table.Td>
                 </Table.Tr>
@@ -234,6 +260,21 @@ function RagDocuments() {
       )}
 
       {result && <Pagination page={page} pageSize={PAGE_SIZE} total={result.total} onPageChange={setPage} />}
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        loading={isDeleting}
+        title="Delete this document?"
+        description={
+          deleteTarget
+            ? `"${deleteTarget.title}" will be permanently removed. It never finished ingesting, so nothing else references it.`
+            : ''
+        }
+        confirmLabel="Delete"
+        tone="danger"
+      />
     </ContentContainer>
   );
 }

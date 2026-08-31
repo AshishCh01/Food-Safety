@@ -11,7 +11,9 @@ from app.repositories import audit_log_repository, rag_document_repository
 from app.schemas.rag import RagDocumentCreate, RagDocumentRead
 from app.services import storage_service
 from app.utils.enums import RagDocumentStatus
-from app.utils.exceptions import RagDocumentDuplicateError, RagDocumentNotFoundError
+from app.utils.exceptions import RagDocumentDeleteNotAllowedError, RagDocumentDuplicateError, RagDocumentNotFoundError
+
+_DELETABLE_STATUSES = (RagDocumentStatus.PENDING, RagDocumentStatus.FAILED)
 from app.utils.validators import validate_rag_document_file
 
 
@@ -102,6 +104,33 @@ def deactivate_document(db: Session, document: RagDocument, *, actor_user_id: uu
     )
     db.commit()
     return document
+
+
+def delete_document(db: Session, document: RagDocument, *, actor_user_id: uuid.UUID) -> None:
+    """Permanently removes a document that never successfully became part of
+    the knowledge base (`pending` or `failed`). An `ingested` document must be
+    deactivated instead (see `deactivate_document`) - it may already be relied
+    on by the Inspector Assistant / Investigation Agent, so it is never
+    silently deleted."""
+    if document.status not in _DELETABLE_STATUSES:
+        raise RagDocumentDeleteNotAllowedError()
+
+    settings = get_settings()
+    storage_service.delete_file(settings.rag_storage_bucket, document.storage_path)
+
+    document_id = document.id
+    document_title = document.title
+    rag_document_repository.delete(db, document)
+
+    audit_log_repository.record(
+        db,
+        actor_user_id=actor_user_id,
+        action="rag_document_deleted",
+        entity_type="rag_document",
+        entity_id=document_id,
+        details={"title": document_title},
+    )
+    db.commit()
 
 
 def to_document_read(document: RagDocument) -> RagDocumentRead:

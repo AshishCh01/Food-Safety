@@ -256,3 +256,17 @@ def deactivate_rag_document(
     document = rag_document_service.get_document(db, document_id)
     document = rag_document_service.deactivate_document(db, document, actor_user_id=admin_user.id)
     return rag_document_service.to_document_read(document)
+
+
+@router.delete("/rag/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_rag_document(
+    document_id: uuid.UUID,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> None:
+    """Permanently removes a document that never successfully entered the
+    knowledge base (`pending` or `failed`), so a bad upload/ingest attempt can
+    be cleared and retried from scratch. An `ingested` document must be
+    deactivated instead - see `deactivate_rag_document`."""
+    document = rag_document_service.get_document(db, document_id)
+    rag_document_service.delete_document(db, document, actor_user_id=admin_user.id)
