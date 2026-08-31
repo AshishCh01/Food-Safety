@@ -36,6 +36,7 @@ function Notifications() {
   async function handleMarkRead(notificationId) {
     try {
       await markNotificationRead(notificationId, getAccessToken());
+      window.dispatchEvent(new CustomEvent('notifications_updated'));
       load();
     } catch (err) {
       setError(err.message);
@@ -45,6 +46,7 @@ function Notifications() {
   async function handleMarkAllRead() {
     try {
       await markAllNotificationsRead(getAccessToken());
+      window.dispatchEvent(new CustomEvent('notifications_updated'));
       load();
     } catch (err) {
       setError(err.message);

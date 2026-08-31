@@ -13,13 +13,20 @@ function Topbar({ onMenuClick }) {
 
   useEffect(() => {
     let cancelled = false;
-    getUnreadNotificationCount(getAccessToken())
-      .then((result) => {
-        if (!cancelled) setUnreadCount(result.unread_count);
-      })
-      .catch(() => {});
+    function fetchCount() {
+      getUnreadNotificationCount(getAccessToken())
+        .then((result) => {
+          if (!cancelled) setUnreadCount(result.unread_count);
+        })
+        .catch(() => {});
+    }
+    
+    fetchCount();
+    window.addEventListener('notifications_updated', fetchCount);
+    
     return () => {
       cancelled = true;
+      window.removeEventListener('notifications_updated', fetchCount);
     };
   }, [getAccessToken]);
 
