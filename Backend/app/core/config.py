@@ -44,11 +44,11 @@ class Settings(BaseSettings):
     supabase_storage_bucket: str = "complaint-evidence"
 
     gemini_api_key: SecretStr = SecretStr("")
-    gemini_main_model: str = "gemini-3.7-flash"
+    gemini_main_model: str = "gemini-3.6-flash"
     gemini_reasoning_model: str = "gemini-3.6-flash"
     gemini_embedding_model: str = "gemini-embedding-2"
     gemini_embedding_dimensions: int = 768
-    gemini_request_timeout_seconds: float = 20.0
+    gemini_request_timeout_seconds: float = 60.0
 
     rag_storage_bucket: str = "rag-documents"
     rag_max_upload_size_mb: int = 20
