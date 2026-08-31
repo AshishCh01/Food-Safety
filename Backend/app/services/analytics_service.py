@@ -145,6 +145,7 @@ def get_statewide_analytics(db: Session, *, trend_days: int = DEFAULT_TREND_DAYS
                 "pending_complaints": 0,
                 "active_complaints": 0,
                 "resolved_complaints": 0,
+                "rejected_complaints": 0,
             },
         )
         if status is None:
@@ -156,6 +157,8 @@ def get_statewide_analytics(db: Session, *, trend_days: int = DEFAULT_TREND_DAYS
             entry["active_complaints"] += count
         elif status in RESOLVED_STATUSES:
             entry["resolved_complaints"] += count
+        elif status in REJECTED_STATUSES:
+            entry["rejected_complaints"] += count
 
     district_breakdown = [DistrictSummary(**entry) for entry in per_district.values()]
 

@@ -70,6 +70,7 @@ class DistrictSummary(BaseModel):
     pending_complaints: int
     active_complaints: int
     resolved_complaints: int
+    rejected_complaints: int
 
 
 class StatewideAnalytics(BaseModel):

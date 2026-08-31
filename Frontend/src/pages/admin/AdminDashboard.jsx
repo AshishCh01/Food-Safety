@@ -125,6 +125,7 @@ function AdminDashboard() {
                     <Table.Th>Pending</Table.Th>
                     <Table.Th>Active</Table.Th>
                     <Table.Th>Resolved</Table.Th>
+                    <Table.Th>Rejected</Table.Th>
                   </tr>
                 </Table.Head>
                 <Table.Body>
@@ -136,6 +137,7 @@ function AdminDashboard() {
                       <Table.Td>{item.pending_complaints}</Table.Td>
                       <Table.Td>{item.active_complaints}</Table.Td>
                       <Table.Td>{item.resolved_complaints}</Table.Td>
+                      <Table.Td>{item.rejected_complaints}</Table.Td>
                     </Table.Tr>
                   ))}
                 </Table.Body>
