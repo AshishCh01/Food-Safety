@@ -247,6 +247,16 @@ class RagDocumentDuplicateError(ConflictError):
         super().__init__(message)
 
 
+class RagDocumentDeleteNotAllowedError(ConflictError):
+    code = "RAG_DOCUMENT_DELETE_NOT_ALLOWED"
+
+    def __init__(
+        self,
+        message: str = "Only pending or failed documents can be deleted. Deactivate an ingested document instead.",
+    ) -> None:
+        super().__init__(message)
+
+
 class RagIngestionError(AppError):
     code = "RAG_INGESTION_FAILED"
     status_code = 422

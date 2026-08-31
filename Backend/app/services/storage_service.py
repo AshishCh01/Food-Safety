@@ -45,6 +45,19 @@ def upload_file(bucket: str, path: str, content: bytes, content_type: str) -> st
     return path
 
 
+def delete_file(bucket: str, path: str) -> None:
+    """Best-effort delete of a storage object - callers should not fail an
+    otherwise-successful operation (e.g. deleting a document record) just
+    because the underlying file was already missing or the delete itself
+    failed; the object being gone is the desired end state either way."""
+    settings = get_settings()
+    url = f"{settings.supabase_url}/storage/v1/object/{bucket}/{path}"
+    try:
+        _client().request("DELETE", url, headers=_headers(), timeout=30.0)
+    except httpx.HTTPError:
+        pass
+
+
 def download_file(bucket: str, path: str) -> bytes:
     """Fetches the raw bytes of an already-uploaded object, e.g. so an AI agent
     can pass evidence content to Gemini. Uses the same private-bucket,

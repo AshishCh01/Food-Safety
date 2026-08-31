@@ -3,8 +3,16 @@
 endpoint, matching the existing synchronous-agent-call pattern used by
 Complaint Triage / Evidence Analysis (an explicit POST triggers the run; no
 background queue exists in this phase).
+
+Embedding is the slow part - one Gemini API round-trip per chunk, and on a
+free-tier API key the project-wide rate limit is low enough that even a
+handful of back-to-back calls trips a 429. So chunks are embedded fully
+sequentially with a fixed pacing delay between calls (deliberately trading
+ingestion speed for reliability), plus patient exponential-backoff retries
+for the occasional 429 that still gets through.
 """
 
+import random
 import time
 
 from sqlalchemy.orm import Session
@@ -13,14 +21,27 @@ from app.core.config import get_settings
 from app.models.rag_document import RagDocument
 from app.models.rag_document_chunk import RagDocumentChunk
 from app.rag import chunking, parsing
+from app.rag.chunking import Chunk
 from app.repositories import rag_chunk_repository, rag_document_repository
 from app.services import ai_service
 from app.utils.enums import RagDocumentStatus
 from app.utils.exceptions import AppError, GeminiRateLimitedError, GeminiUnavailableError, RagIngestionError
 
-_MAX_EMBED_ATTEMPTS = 2
-_RETRY_BACKOFF_SECONDS = 1.0
+# A large document (e.g. a full legal Act) can chunk into 100+ pieces, each
+# needing its own Gemini embedding call - at that volume, hitting a 429 at
+# least once is the normal case, not the exception. So this retries more
+# patiently (exponential backoff + jitter) than the single-call agents
+# (complaint triage, evidence analysis) do, where a human is waiting
+# synchronously on one request.
+_MAX_EMBED_ATTEMPTS = 6
+_RETRY_BASE_SECONDS = 2.0
+_RETRY_MAX_BACKOFF_SECONDS = 30.0
 _RETRYABLE_EXCEPTIONS = (GeminiRateLimitedError, GeminiUnavailableError)
+
+# Minimum gap between the *start* of one embedding call and the next, so
+# ingestion behaves like a slow trickle instead of a burst - the actual
+# cause of the 429s seen on a free-tier key, not raw call volume.
+_MIN_CALL_INTERVAL_SECONDS = 2.0
 
 
 def _embed_with_retry(text: str) -> list[float]:
@@ -29,10 +50,22 @@ def _embed_with_retry(text: str) -> list[float]:
             return ai_service.embed_text(text)
         except _RETRYABLE_EXCEPTIONS:
             if attempt < _MAX_EMBED_ATTEMPTS:
-                time.sleep(_RETRY_BACKOFF_SECONDS * attempt)
+                backoff = min(_RETRY_BASE_SECONDS * (2 ** (attempt - 1)), _RETRY_MAX_BACKOFF_SECONDS)
+                time.sleep(backoff + random.uniform(0, backoff * 0.25))
                 continue
             raise
     raise AssertionError("unreachable")  # pragma: no cover
+
+
+def _embed_all(pieces: list[Chunk]) -> list[list[float]]:
+    """Embeds every chunk one at a time, in order, pacing the start of each
+    call at least `_MIN_CALL_INTERVAL_SECONDS` apart."""
+    embeddings: list[list[float]] = []
+    for piece in pieces:
+        if embeddings:
+            time.sleep(_MIN_CALL_INTERVAL_SECONDS)
+        embeddings.append(_embed_with_retry(piece.content))
+    return embeddings
 
 
 def ingest_document(db: Session, document: RagDocument, file_bytes: bytes) -> RagDocument:
@@ -50,6 +83,7 @@ def ingest_document(db: Session, document: RagDocument, file_bytes: bytes) -> Ra
         if not pieces:
             raise RagIngestionError("No extractable text was found in this document.")
 
+        embeddings = _embed_all(pieces)
         chunk_rows = [
             RagDocumentChunk(
                 document_id=document.id,
@@ -64,10 +98,10 @@ def ingest_document(db: Session, document: RagDocument, file_bytes: bytes) -> Ra
                     "jurisdiction": document.jurisdiction,
                     "version": document.version,
                 },
-                embedding=_embed_with_retry(piece.content),
+                embedding=embedding,
                 embedding_model=settings.gemini_embedding_model,
             )
-            for piece in pieces
+            for piece, embedding in zip(pieces, embeddings)
         ]
         rag_chunk_repository.bulk_create(db, chunk_rows)
     except AppError as exc:

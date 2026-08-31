@@ -72,14 +72,26 @@ def _split_by_size(text: str, target_chars: int, overlap_chars: int) -> list[str
     if len(text) <= target_chars:
         return [text]
 
+    # A natural break (paragraph/sentence) is only accepted if it falls in
+    # the back half of the window, close to `end` - never near `start`. Text
+    # like a dense list of legal definitions can have long stretches with no
+    # "\n\n" and only a stray ". " early in the window; without this floor,
+    # rfind() would return that early match on every iteration (it's still
+    # the rightmost one in [start, end)), `end` would stay pinned there, and
+    # the overlap-based advance would collapse to `start + 1` - crawling one
+    # character at a time and re-emitting nearly-identical overlapping
+    # pieces until `start` finally passes that fixed point.
+    min_boundary_search_start_ratio = 0.5
+
     pieces: list[str] = []
     start = 0
     while start < len(text):
         end = min(start + target_chars, len(text))
         if end < len(text):
-            boundary = text.rfind("\n\n", start, end)
+            search_start = start + int((end - start) * min_boundary_search_start_ratio)
+            boundary = text.rfind("\n\n", search_start, end)
             if boundary <= start:
-                boundary = text.rfind(". ", start, end)
+                boundary = text.rfind(". ", search_start, end)
             if boundary > start:
                 end = boundary + 1
         piece = text[start:end].strip()
@@ -91,6 +103,46 @@ def _split_by_size(text: str, target_chars: int, overlap_chars: int) -> list[str
     return pieces
 
 
+def _merge_small_sections(
+    sections: list[tuple[str | None, str]], target_chars: int
+) -> list[tuple[str | None, str]]:
+    """Combines consecutive small sections (on the same page) up toward
+    `target_chars` instead of emitting one chunk per detected heading
+    regardless of size. A densely-numbered legal document can detect a
+    heading every one or two sentences (e.g. "3. Definitions", "(1)..."),
+    which without merging produces hundreds of near-empty chunks - hurting
+    both ingestion cost (one embedding call each) and retrieval quality (a
+    chunk too short to carry context on its own). A section already at or
+    over `target_chars` is left alone so `_split_by_size` still handles it."""
+    merged: list[tuple[str | None, str]] = []
+    buffer_title: str | None = None
+    buffer_parts: list[str] = []
+    buffer_len = 0
+
+    def flush() -> None:
+        nonlocal buffer_title, buffer_parts, buffer_len
+        if buffer_parts:
+            merged.append((buffer_title, "\n\n".join(buffer_parts)))
+        buffer_title, buffer_parts, buffer_len = None, [], 0
+
+    for section_title, body in sections:
+        if len(body) >= target_chars:
+            flush()
+            merged.append((section_title, body))
+            continue
+
+        if buffer_parts and buffer_len + len(body) > target_chars:
+            flush()
+
+        if buffer_title is None:
+            buffer_title = section_title
+        buffer_parts.append(body)
+        buffer_len += len(body)
+
+    flush()
+    return merged
+
+
 def chunk_pages(pages: list[PageText]) -> list[Chunk]:
     settings = get_settings()
     chunks: list[Chunk] = []
@@ -99,7 +151,8 @@ def chunk_pages(pages: list[PageText]) -> list[Chunk]:
     for page in pages:
         if not page.text.strip():
             continue
-        for section_title, body in _split_into_sections(page.text):
+        sections = _merge_small_sections(_split_into_sections(page.text), settings.rag_chunk_target_chars)
+        for section_title, body in sections:
             for piece in _split_by_size(body, settings.rag_chunk_target_chars, settings.rag_chunk_overlap_chars):
                 chunks.append(
                     Chunk(

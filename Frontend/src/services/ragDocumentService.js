@@ -50,3 +50,7 @@ export function ingestRagDocument(documentId, token) {
 export function deactivateRagDocument(documentId, token) {
   return apiRequest(`/admin/rag/documents/${documentId}/deactivate`, { method: 'POST', token });
 }
+
+export function deleteRagDocument(documentId, token) {
+  return apiRequest(`/admin/rag/documents/${documentId}`, { method: 'DELETE', token });
+}
