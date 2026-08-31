@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { register } from '../../services/authService';
+import { useAuth } from '../../hooks/useAuth';
 import Alert from '../../components/ui/Alert';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -13,6 +14,8 @@ function Register() {
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const { login } = useAuth();
+
   function updateField(field) {
     return (event) => setForm((prev) => ({ ...prev, [field]: event.target.value }));
   }
@@ -23,7 +26,8 @@ function Register() {
     setIsSubmitting(true);
     try {
       await register(form);
-      navigate('/login', { replace: true, state: { registered: true } });
+      await login(form.email, form.password);
+      navigate('/citizen', { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
