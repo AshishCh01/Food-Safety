@@ -140,6 +140,23 @@ otherwise be rejected by this lower-level cap first), and the `RAG_*`
 chunking/retrieval parameters (`docs/RAG_ARCHITECTURE.md`). Set them only if
 the defaults need to change.
 
+`GEMINI_EMBEDDING_DIMENSIONS` (default `768`) deserves its own callout rather
+than folding into that list: it sets the output dimensionality requested from
+`GEMINI_EMBEDDING_MODEL`, and it must match the fixed size of the
+`rag_document_chunks.embedding` pgvector column (`EMBEDDING_DIM = 768` in
+`Backend/alembic/versions/7c3f1a9d2e4b_add_rag_and_assistant_tables.py`) —
+these are two independently-set values with no runtime check that they agree.
+If `GEMINI_EMBEDDING_MODEL` is ever changed to a model with a different
+native embedding size, either leave `GEMINI_EMBEDDING_DIMENSIONS` at `768`
+(current Gemini embedding models support configurable output
+dimensionality), or write a new migration to resize the column — and
+re-embed every existing `rag_document_chunks` row — before changing this
+value. Getting this out of sync doesn't corrupt data (pgvector rejects a
+dimension mismatch at the database level), but it surfaces as a cryptic
+`expected 768 dimensions, not N` Postgres error on the next ingestion or
+retrieval query rather than a clear validation message pointing at this
+setting — worth knowing before you're debugging it live.
+
 ### 4.2 Frontend (`food-safety-frontend`)
 
 Reviewed from `Frontend/.env.example`.

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Text, func
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
@@ -11,6 +11,11 @@ from app.utils.enums import AssignmentStatus
 
 class Assignment(Base):
     __tablename__ = "assignments"
+    # Composite index for the "my active cases" query pattern (staff_id
+    # equality + optional status equality) used by
+    # assignment_repository.list_by_inspector - see docs/DATABASE_SCHEMA.md
+    # section 22 and docs/PROJECT_AUDIT_REPORT.md finding 1.8.
+    __table_args__ = (Index("ix_assignments_staff_status", "assigned_to_staff_id", "status"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     # unique=True: a complaint has at most one assignment (see

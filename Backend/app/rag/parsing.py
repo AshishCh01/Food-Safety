@@ -12,6 +12,7 @@ this extra Gemini call - a normal text-layer PDF never triggers OCR.
 
 import io
 import json
+import logging
 from dataclasses import dataclass
 
 import pymupdf
@@ -19,18 +20,30 @@ import pypdf
 
 from app.services import ai_service
 from app.utils.exceptions import (
-    GeminiRequestError,
+    GeminiRateLimitedError,
+    GeminiUnavailableError,
     InvalidAiResponseError,
     RagIngestionError,
     UnsupportedFileTypeError,
 )
 
-# A page that genuinely has no legible text is rare in practice (most scanned
-# government forms are dense with text/tables) - an empty Gemini response is
-# far more likely a transient hiccup. So this retries once before accepting
-# "no text on this page", rather than failing the entire multi-page document
-# over one flaky page.
+logger = logging.getLogger(__name__)
+
+# Only genuinely transient failures (429s, timeouts/5xxs) are worth retrying -
+# a page that trips a rate limit or hits a flaky timeout is likely to succeed
+# on a second attempt, so this retries once before giving up on the page
+# rather than failing the entire multi-page document over one flaky call.
+# Non-retryable failures (GeminiRequestError - bad request, safety/schema
+# rejection, or a genuinely empty response) are not caught here and propagate
+# immediately, same as every other Gemini call site in the codebase.
 _OCR_EMPTY_RESPONSE_ATTEMPTS = 2
+
+# Bounds the number of per-page OCR calls a single ingestion run can trigger -
+# without this, a crafted PDF full of blank/no-text-layer pages (but under
+# the rag_max_upload_size_mb file-size cap) could still force an unmetered
+# number of Gemini API calls in one request (docs/PROJECT_AUDIT_REPORT.md
+# finding 1.11).
+_MAX_OCR_PAGES_PER_DOCUMENT = 50
 
 SUPPORTED_MIME_TYPES = {"application/pdf", "text/plain", "text/markdown"}
 
@@ -72,10 +85,15 @@ def _ocr_page_image(image_bytes: bytes) -> str:
                 media_mime_type=_OCR_IMAGE_MIME_TYPE,
                 response_schema=_OCR_RESPONSE_SCHEMA,
             )
-        except GeminiRequestError:
+        except (GeminiRateLimitedError, GeminiUnavailableError):
             if attempt < _OCR_EMPTY_RESPONSE_ATTEMPTS:
                 continue
-            return ""  # still empty after a retry - treat as "no legible text" rather than failing the document
+            logger.warning(
+                "OCR transcription failed after %d attempt(s) due to a persistent transient error; "
+                "treating this page as having no legible text.",
+                _OCR_EMPTY_RESPONSE_ATTEMPTS,
+            )
+            return ""  # still failing after a retry - treat as "no legible text" rather than failing the document
         try:
             return json.loads(raw).get("text", "")
         except (ValueError, AttributeError) as exc:
@@ -98,6 +116,13 @@ def parse_pdf(file_bytes: bytes) -> list[PageText]:
 
     if all(page.text.strip() for page in pages):
         return pages
+
+    pages_needing_ocr = [page for page in pages if not page.text.strip()]
+    if len(pages_needing_ocr) > _MAX_OCR_PAGES_PER_DOCUMENT:
+        raise RagIngestionError(
+            f"This document has {len(pages_needing_ocr)} pages with no extractable text layer, "
+            f"exceeding the {_MAX_OCR_PAGES_PER_DOCUMENT}-page OCR limit per ingestion run."
+        )
 
     try:
         ocr_doc = pymupdf.open(stream=file_bytes, filetype="pdf")

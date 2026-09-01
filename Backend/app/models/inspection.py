@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, Enum as SAEnum, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import Uuid
 
@@ -11,6 +11,11 @@ from app.utils.enums import InspectionStatus
 
 class Inspection(Base):
     __tablename__ = "inspections"
+    # Composite index for the "my active cases" query pattern (inspector_id
+    # equality + optional status equality) used by
+    # inspection_repository.list_by_inspector - see docs/DATABASE_SCHEMA.md
+    # section 22 and docs/PROJECT_AUDIT_REPORT.md finding 1.8.
+    __table_args__ = (Index("ix_inspections_inspector_status", "inspector_id", "inspection_status"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     complaint_id: Mapped[uuid.UUID] = mapped_column(
