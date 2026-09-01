@@ -18,7 +18,19 @@ import pymupdf
 import pypdf
 
 from app.services import ai_service
-from app.utils.exceptions import InvalidAiResponseError, RagIngestionError, UnsupportedFileTypeError
+from app.utils.exceptions import (
+    GeminiRequestError,
+    InvalidAiResponseError,
+    RagIngestionError,
+    UnsupportedFileTypeError,
+)
+
+# A page that genuinely has no legible text is rare in practice (most scanned
+# government forms are dense with text/tables) - an empty Gemini response is
+# far more likely a transient hiccup. So this retries once before accepting
+# "no text on this page", rather than failing the entire multi-page document
+# over one flaky page.
+_OCR_EMPTY_RESPONSE_ATTEMPTS = 2
 
 SUPPORTED_MIME_TYPES = {"application/pdf", "text/plain", "text/markdown"}
 
@@ -52,16 +64,23 @@ _OCR_RESPONSE_SCHEMA = {
 
 
 def _ocr_page_image(image_bytes: bytes) -> str:
-    raw = ai_service.generate_structured_json_with_media(
-        _OCR_PROMPT,
-        media_bytes=image_bytes,
-        media_mime_type=_OCR_IMAGE_MIME_TYPE,
-        response_schema=_OCR_RESPONSE_SCHEMA,
-    )
-    try:
-        return json.loads(raw).get("text", "")
-    except (ValueError, AttributeError) as exc:
-        raise InvalidAiResponseError() from exc
+    for attempt in range(1, _OCR_EMPTY_RESPONSE_ATTEMPTS + 1):
+        try:
+            raw = ai_service.generate_structured_json_with_media(
+                _OCR_PROMPT,
+                media_bytes=image_bytes,
+                media_mime_type=_OCR_IMAGE_MIME_TYPE,
+                response_schema=_OCR_RESPONSE_SCHEMA,
+            )
+        except GeminiRequestError:
+            if attempt < _OCR_EMPTY_RESPONSE_ATTEMPTS:
+                continue
+            return ""  # still empty after a retry - treat as "no legible text" rather than failing the document
+        try:
+            return json.loads(raw).get("text", "")
+        except (ValueError, AttributeError) as exc:
+            raise InvalidAiResponseError() from exc
+    raise AssertionError("unreachable")  # pragma: no cover
 
 
 def _ocr_pdf_page(pdf_doc: "pymupdf.Document", page_index: int) -> str:

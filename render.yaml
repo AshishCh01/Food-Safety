@@ -36,7 +36,15 @@ services:
     # (docs/DEPLOYMENT.md "Database migrations"). `alembic upgrade head` is
     # a no-op when the database is already at head, so re-running it on
     # every boot/restart is safe.
-    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    #
+    # --proxy-headers --forwarded-allow-ips='*' makes uvicorn trust the
+    # X-Forwarded-For header Render's edge proxy sets, so request.client.host
+    # (used by app/core/rate_limit.py's per-IP limiter) reflects the real
+    # visiting client rather than Render's internal proxy address for every
+    # request. '*' is safe specifically because Render's network only allows
+    # the platform's own proxy to reach this service on $PORT - there is no
+    # direct public ingress path that could spoof the header.
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:

@@ -1,7 +1,12 @@
 from functools import lru_cache
 
-from pydantic import SecretStr
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Checked-in fallback for local/dev only - the value is public (it's in git
+# history), so a production boot must never be allowed to silently keep it.
+# See the `_reject_insecure_production_secret` validator below.
+_INSECURE_DEFAULT_JWT_SECRET = "insecure-development-secret-change-me"
 
 
 class Settings(BaseSettings):
@@ -11,14 +16,16 @@ class Settings(BaseSettings):
     environment: str = "development"
     log_level: str = "INFO"
 
-    database_url: str = "postgresql+psycopg2://postgres:password@localhost:5432/postgres"
+    database_url: SecretStr = SecretStr(
+        "postgresql+psycopg2://postgres:password@localhost:5432/postgres"
+    )
     db_pool_size: int = 10
     db_max_overflow: int = 20
     db_pool_recycle_seconds: int = 1800
 
     cors_origins: str = "http://localhost:5173"
 
-    jwt_secret_key: str = "insecure-development-secret-change-me"
+    jwt_secret_key: SecretStr = SecretStr(_INSECURE_DEFAULT_JWT_SECRET)
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
@@ -63,6 +70,20 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+    @model_validator(mode="after")
+    def _reject_insecure_production_secret(self) -> "Settings":
+        """Fail fast at startup rather than silently serving requests signed
+        with a secret that's public in the repo's git history - a missing
+        JWT_SECRET_KEY env var in any deployment path other than Render's own
+        blueprint (which sets `generateValue: true`) would otherwise boot
+        successfully and let anyone forge a valid token for any user/role."""
+        if self.environment == "production" and self.jwt_secret_key.get_secret_value() == _INSECURE_DEFAULT_JWT_SECRET:
+            raise ValueError(
+                "JWT_SECRET_KEY must be set to a real secret in production - "
+                "refusing to start with the insecure default."
+            )
+        return self
 
 
 @lru_cache

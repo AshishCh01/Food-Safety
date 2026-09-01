@@ -65,7 +65,7 @@ Equivalent to the blueprint, created by hand in the Render dashboard:
 | Runtime | Python 3 |
 | Root Directory | `Backend` |
 | Build Command | `pip install -r requirements.txt` |
-| Start Command | `alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| Start Command | `alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'` |
 | Health Check Path | `/health` |
 | Plan | Free |
 
@@ -348,7 +348,13 @@ environment from scratch.
   current deployment target; it would need a shared store (e.g. Redis) only
   if scaled to multiple backend instances, which is explicitly out of scope
   here (`docs/SECURITY_AND_RBAC.md` section 11, `docs/SYSTEM_ARCHITECTURE.md`
-  section 14).
+  section 14). The limiter keys on `request.client.host`, which is only the
+  real visiting client's IP because the start command above passes
+  `--proxy-headers --forwarded-allow-ips='*'` to uvicorn - without those
+  flags, every request behind Render's edge proxy would report the same
+  internal proxy address, collapsing the per-IP limit into one shared bucket
+  for all users. Confirm both flags are present on any manually-created
+  service (Option B above) or on any deployment target other than Render.
 - **Render Free Tier instances spin down after inactivity** and take a short
   time to spin back up on the next request — expected behavior for the free
   plan, not an application bug. The first request after idle time (e.g. the

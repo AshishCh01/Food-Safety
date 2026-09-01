@@ -42,7 +42,7 @@ def _create_token(
     }
     if extra_claims:
         payload.update(extra_claims)
-    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    return jwt.encode(payload, settings.jwt_secret_key.get_secret_value(), algorithm=settings.jwt_algorithm)
 
 
 def create_access_token(
@@ -75,7 +75,7 @@ def create_access_token(
 def decode_token(token: str, expected_type: TokenType) -> dict:
     settings = get_settings()
     try:
-        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(token, settings.jwt_secret_key.get_secret_value(), algorithms=[settings.jwt_algorithm])
     except jwt.ExpiredSignatureError as exc:
         raise InvalidTokenError("Token has expired.") from exc
     except jwt.InvalidTokenError as exc:
