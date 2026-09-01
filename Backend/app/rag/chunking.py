@@ -131,7 +131,17 @@ def _merge_small_sections(
             merged.append((section_title, body))
             continue
 
-        if buffer_parts and buffer_len + len(body) > target_chars:
+        # Never fold an untitled section (preamble text with no heading yet)
+        # together with a titled one, in either direction - the buffer would
+        # otherwise silently adopt whichever title happened to be set first,
+        # misattributing content to a heading it was never actually under
+        # (e.g. introductory text before "# Scope" would get cited as
+        # "Section: Scope"). Merging is still applied across a run of
+        # same-kind (titled-with-titled, or untitled-with-untitled) small
+        # sections, which is this function's actual purpose.
+        if buffer_parts and (
+            buffer_len + len(body) > target_chars or (buffer_title is None) != (section_title is None)
+        ):
             flush()
 
         if buffer_title is None:

@@ -5,6 +5,7 @@ import {
   logout as logoutRequest,
   refreshAccessToken,
 } from '../services/authService';
+import { SESSION_EXPIRED_EVENT } from '../services/api';
 import { AuthContext } from './AuthContext';
 
 const ACCESS_TOKEN_KEY = 'fsp_access_token';
@@ -63,6 +64,20 @@ export function AuthProvider({ children }) {
     return () => {
       isMounted = false;
     };
+  }, [clearSession]);
+
+  useEffect(() => {
+    // Dispatched by services/api.js when a mid-session request 401s and the
+    // silent refresh-and-retry it attempts also fails (no refresh token, or
+    // the backend rejects it) - api.js already cleared the stored tokens
+    // itself, this only needs to clear the React `user` state so
+    // ProtectedRoute (which checks `isAuthenticated`) redirects to /login
+    // instead of the page silently failing every subsequent request.
+    function handleSessionExpired() {
+      clearSession();
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
   }, [clearSession]);
 
   const login = useCallback(async (email, password) => {
