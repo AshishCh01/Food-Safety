@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.dependencies import require_admin
+from app.core.rate_limit import rag_document_upload_rate_limiter
 from app.models.user import User
 from app.repositories import (
     audit_log_repository,
@@ -164,7 +165,12 @@ def list_audit_logs(
     )
 
 
-@router.post("/rag/documents", response_model=RagDocumentRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/rag/documents",
+    response_model=RagDocumentRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(rag_document_upload_rate_limiter)],
+)
 async def upload_rag_document(
     file: UploadFile = File(...),
     title: str = Form(...),

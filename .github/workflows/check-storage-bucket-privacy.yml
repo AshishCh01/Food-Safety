@@ -1,0 +1,48 @@
+name: Check storage bucket privacy
+
+# Runs Backend/scripts/check_storage_bucket_privacy.py on a daily schedule
+# against the production Supabase project. Evidence/RAG-document
+# authorization is enforced entirely in the backend API (ownership/district/
+# role checks) - none of that matters if the underlying Supabase Storage
+# bucket itself is ever misconfigured public, which nothing in the running
+# application would otherwise notice on its own (see
+# docs/SECURITY_AND_RBAC.md section 8, docs/PROJECT_AUDIT_REPORT.md finding
+# 1.5). Mirrors cleanup-refresh-sessions.yml's scheduling approach for the
+# same reasons: Render's Cron Job service type is a paid feature, and this
+# project deliberately adds no always-on scheduler infrastructure.
+
+on:
+  schedule:
+    # 04:00 UTC daily - offset from the refresh-session cleanup workflow's
+    # 03:00 UTC run so the two don't contend for the same runner minute.
+    - cron: "0 4 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  check-bucket-privacy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check bucket privacy
+        env:
+          # Configure these once as GitHub Actions repository secrets
+          # (Settings -> Secrets and variables -> Actions), using the same
+          # values set on the Render backend service. Never commit them to
+          # source control. SUPABASE_STORAGE_BUCKET/RAG_STORAGE_BUCKET are
+          # optional - the script falls back to this project's documented
+          # default bucket names (complaint-evidence / rag-documents) if
+          # they're not set here.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python -m scripts.check_storage_bucket_privacy

@@ -12,7 +12,7 @@ Deliberately out of scope, per `docs/DEVELOPMENT_ROADMAP.md` Phase 13's
 constraints:
 
 - Docker / Docker Compose (existing `Dockerfile`s remain for local
-  experimentation only — see section 8)
+  experimentation only — see section 9)
 - Redis, Celery, or any task queue
 - Kubernetes
 - AWS- or GCP-specific infrastructure
@@ -132,9 +132,13 @@ A few additional tuning knobs exist only in `Settings`
 demo deployment: `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`, `DB_POOL_RECYCLE_SECONDS`
 (connection pool sizing), `REFRESH_TOKEN_REUSE_GRACE_SECONDS`,
 `REFRESH_SESSION_RETENTION_DAYS`,
-`REFRESH_SESSION_REUSE_DETECTED_RETENTION_DAYS` (see section 7), and the
-`RAG_*` chunking/retrieval parameters (`docs/RAG_ARCHITECTURE.md`). Set them
-only if the defaults need to change.
+`REFRESH_SESSION_REUSE_DETECTED_RETENTION_DAYS` (see section 7),
+`MAX_REQUEST_BODY_SIZE_MB` (default `25` — the global request-size cap
+enforced by `app/core/middleware.py`; raise this only if
+`RAG_MAX_UPLOAD_SIZE_MB` is ever configured above the default and would
+otherwise be rejected by this lower-level cap first), and the `RAG_*`
+chunking/retrieval parameters (`docs/RAG_ARCHITECTURE.md`). Set them only if
+the defaults need to change.
 
 ### 4.2 Frontend (`food-safety-frontend`)
 
@@ -255,7 +259,35 @@ used on the Render backend service. The workflow is also runnable on demand
 via its `workflow_dispatch` trigger, e.g. after a manual retention-policy
 change, without waiting for the next scheduled run.
 
-## 8. Docker
+## 8. Storage Bucket Privacy Check
+
+`Backend/scripts/check_storage_bucket_privacy.py` verifies that both
+Supabase Storage buckets (section 6) are actually configured private.
+Evidence/RAG-document authorization is enforced entirely in the backend API
+(ownership/district/role checks before a signed URL is ever generated) —
+none of that matters if the underlying bucket itself is ever misconfigured
+public (a single checkbox in the Supabase dashboard), which nothing in the
+running application would otherwise notice on its own, since normal request
+handling never has a reason to call the bucket-config endpoint
+(`docs/SECURITY_AND_RBAC.md` section 8, `docs/PROJECT_AUDIT_REPORT.md`
+finding 1.5).
+
+This deployment uses **`.github/workflows/check-storage-bucket-privacy.yml`**,
+a scheduled GitHub Actions workflow (daily at 04:00 UTC — offset from the
+refresh-session cleanup workflow's 03:00 UTC run), for the same reasons as
+section 7's cleanup workflow: no Render Cron Job (paid feature), no new
+always-on service. It exits non-zero (failing the workflow run, which
+GitHub surfaces as a failed Action) if a bucket is confirmed public **or**
+if a check could not be completed at all (e.g. Supabase unreachable) — a
+broken check must not silently look like a passing one.
+
+Setup: add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` repository secrets
+with the same values used on the Render backend service. Also runnable on
+demand via `workflow_dispatch`, e.g. right after creating the buckets during
+initial setup (section 6), to confirm they're private before any real
+evidence is uploaded.
+
+## 9. Docker
 
 `Backend/Dockerfile`, `Frontend/Dockerfile`, and `docker-compose.yml` are
 retained for local containerized experimentation only. They are **not**
@@ -264,27 +296,35 @@ both services natively from source (`pip install` / `npm install` +
 `npm run build`), with no image build step. Do not add a `render.yaml`
 `dockerfilePath` or otherwise wire these files into the Render services.
 
-## 9. Production Baseline Checklist
+## 10. Production Baseline Checklist
 
 - [ ] HTTPS — automatic on both Render service types, no action needed.
 - [ ] `CORS_ORIGINS` set to the exact deployed frontend origin(s), not `*`.
 - [ ] No secret (`DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`,
       `JWT_SECRET_KEY`) present in any committed file, Docker file, or log
-      line — `Backend/.gitignore` excludes `.env`; `SUPABASE_SERVICE_ROLE_KEY`
-      and `GEMINI_API_KEY` are Pydantic `SecretStr` so they cannot be
+      line — the repository root `.gitignore` excludes `.env`;
+      `DATABASE_URL`, `JWT_SECRET_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and
+      `GEMINI_API_KEY` are all Pydantic `SecretStr` so they cannot be
       accidentally interpolated into a log message or error response either
-      (`docs/SECURITY_AND_RBAC.md` section 18).
+      (`docs/SECURITY_AND_RBAC.md` section 18); production additionally
+      refuses to boot at all if `JWT_SECRET_KEY` is still the checked-in
+      development default.
 - [ ] `/health` returns `200` with `"database": "connected"`.
 - [ ] Unhandled backend errors return the generic JSON envelope
       (`app/main.py`'s `error_handling_middleware`), never a stack trace —
       verified by `app/tests/integration/test_hardening.py`.
 - [ ] Alembic is at the latest revision (`alembic current` matches
       `alembic heads` when run against the production `DATABASE_URL`).
-- [ ] Both Supabase Storage buckets exist and are private, not public.
+- [ ] Both Supabase Storage buckets exist and are private, not public —
+      verified by running `scripts/check_storage_bucket_privacy.py` (section 8)
+      manually, not just assumed from the dashboard.
 - [ ] The refresh-session cleanup workflow's `DATABASE_URL` secret is set
       and a manual `workflow_dispatch` run succeeds.
+- [ ] The storage bucket privacy check workflow's `SUPABASE_URL` /
+      `SUPABASE_SERVICE_ROLE_KEY` secrets are set and a manual
+      `workflow_dispatch` run succeeds (section 8).
 
-## 10. Smoke Test Checklist
+## 11. Smoke Test Checklist
 
 Run through this after every deploy, or after standing up a fresh
 environment from scratch.
@@ -341,7 +381,7 @@ environment from scratch.
     should be answerable from the seeded RAG corpus → response includes a
     valid source citation (confirms pgvector retrieval end-to-end).
 
-## 11. Known Limitations (carried forward from Phase 12/13, not regressions)
+## 12. Known Limitations (carried forward from Phase 12/13, not regressions)
 
 - **Single-process rate limiting.** `app/core/rate_limit.py` is an in-memory
   limiter. Render Free Tier runs one instance, so this is correct for the

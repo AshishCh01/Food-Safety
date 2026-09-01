@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.agents.evidence_analysis import agent as evidence_analysis_agent
 from app.core.database import get_db
 from app.core.dependencies import get_current_staff_profile, require_inspector
+from app.core.rate_limit import inspector_evidence_upload_rate_limiter
 from app.models.staff_profile import StaffProfile
 from app.schemas.agent import (
     AssistantConversationCreateRequest,
@@ -134,7 +135,10 @@ def add_finding(
 
 
 @router.post(
-    "/inspections/{inspection_id}/evidence", response_model=EvidenceRead, status_code=status.HTTP_201_CREATED
+    "/inspections/{inspection_id}/evidence",
+    response_model=EvidenceRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(inspector_evidence_upload_rate_limiter)],
 )
 async def upload_inspection_evidence(
     inspection_id: uuid.UUID,

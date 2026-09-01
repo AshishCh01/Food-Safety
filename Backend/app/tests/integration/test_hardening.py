@@ -105,6 +105,31 @@ def test_register_is_rate_limited_after_repeated_attempts(client: TestClient) ->
     assert responses[-1].status_code == 429
 
 
+def test_oversized_request_body_is_rejected_with_413_and_cors_headers(client: TestClient, monkeypatch) -> None:
+    """See app/tests/unit/test_middleware.py for isolated coverage of the
+    streaming (no Content-Length) path - this proves the common case (a
+    normal request with a Content-Length header) is rejected end-to-end
+    through the real app, before app/utils/uploads.py's own bounded read
+    would ever run, and still carries CORS headers like every other error
+    response (docs/PROJECT_AUDIT_REPORT.md finding 1.6)."""
+    from app.core import middleware as middleware_module
+
+    class _FakeSettings:
+        max_request_body_size_mb = 0
+
+    monkeypatch.setattr(middleware_module, "get_settings", lambda: _FakeSettings())
+
+    response = client.post(
+        "/api/v1/auth/register",
+        content=b"x" * 2000,
+        headers={"Content-Type": "application/json", "Origin": "http://localhost:5173"},
+    )
+
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "REQUEST_TOO_LARGE"
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
 def test_rate_limiter_windows_are_independent_per_key() -> None:
     limiter = InMemoryRateLimiter(max_requests=2, window_seconds=60)
 

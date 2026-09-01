@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.dependencies import require_citizen
-from app.core.rate_limit import complaint_creation_rate_limiter
+from app.core.rate_limit import citizen_evidence_upload_rate_limiter, complaint_creation_rate_limiter
 from app.models.user import User
 from app.schemas.complaint import ComplaintCreateRequest, ComplaintRead, PaginatedComplaints
 from app.schemas.complaint_status_history import ComplaintStatusHistoryRead
@@ -81,7 +81,12 @@ def get_timeline(
     return complaint_service.to_timeline_read(history)
 
 
-@router.post("/{complaint_id}/evidence", response_model=EvidenceRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{complaint_id}/evidence",
+    response_model=EvidenceRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(citizen_evidence_upload_rate_limiter)],
+)
 async def upload_evidence(
     complaint_id: uuid.UUID,
     file: UploadFile = File(...),

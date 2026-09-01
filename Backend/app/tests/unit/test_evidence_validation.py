@@ -84,6 +84,35 @@ def test_sanitize_filename_falls_back_to_default_when_empty() -> None:
     assert sanitize_filename("///", default="upload") == "upload"
 
 
+def test_sanitize_filename_preserves_extension_when_truncating_a_long_name() -> None:
+    # A 200-char stem plus ".jpeg" exceeds the 150-char cap - truncating from
+    # the tail (the old behaviour) would slice off part or all of ".jpeg",
+    # which would then fail the extension-vs-declared-type check downstream
+    # even though this is a perfectly legitimate file.
+    long_name = ("a" * 200) + ".jpeg"
+
+    sanitized = sanitize_filename(long_name)
+
+    assert len(sanitized) <= 150
+    assert sanitized.endswith(".jpeg")
+
+
+def test_validate_evidence_file_accepts_a_long_filename_with_a_valid_extension() -> None:
+    long_name = ("camera-export-" + "x" * 200) + ".jpg"
+
+    filename = validate_evidence_file(long_name, "image/jpeg", 1024, JPEG_HEADER)
+
+    assert filename.endswith(".jpg")
+    assert len(filename) <= 150
+
+
+def test_sanitize_filename_truncates_a_long_extensionless_name() -> None:
+    sanitized = sanitize_filename("b" * 200)
+
+    assert len(sanitized) == 150
+    assert "." not in sanitized
+
+
 def test_validate_rag_document_accepts_pdf_and_text() -> None:
     assert validate_rag_document_file("law.pdf", "application/pdf", 1024, PDF_HEADER) == "law.pdf"
     assert validate_rag_document_file("sop.txt", "text/plain", 1024, TEXT_HEADER) == "sop.txt"

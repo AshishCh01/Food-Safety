@@ -507,10 +507,12 @@ yet:
   (a scheduled GitHub Actions workflow running
   `scripts/cleanup_refresh_sessions.py` daily, since Render's Cron Job
   service type is a paid feature - see `docs/SECURITY_AND_RBAC.md` section
-  20.4). This is the only file under `.github/workflows/` that actually
-  exists; the aspirational tree above also shows `frontend-ci.yml` and
+  20.4). `.github/workflows/check-storage-bucket-privacy.yml` (added in a
+  later audit-remediation pass, docs/PROJECT_AUDIT_REPORT.md finding 1.5)
+  is the only other file under `.github/workflows/` that actually exists;
+  the aspirational tree above also shows `frontend-ci.yml` and
   `backend-ci.yml`, which were not built in this phase (no CI test gate
-  currently runs on push - see `docs/DEPLOYMENT.md` section 11's known
+  currently runs on push - see `docs/DEPLOYMENT.md` section 12's known
   limitations) - `deploy.yml` doesn't exist either, since deployment is
   handled by Render's own Git-triggered builds via `render.yaml`, not a
   GitHub Actions deploy step. `Backend/.env.example` gained one line,

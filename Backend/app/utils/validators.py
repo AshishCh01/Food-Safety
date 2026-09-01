@@ -49,6 +49,27 @@ _UNSAFE_FILENAME_CHARS_RE = re.compile(r"[^A-Za-z0-9._-]+")
 _MAX_FILENAME_LENGTH = 150
 
 
+def _truncate_preserving_extension(name: str) -> str:
+    """Truncates `name` to `_MAX_FILENAME_LENGTH` from the front of the
+    stem rather than the tail of the whole string, so a long-but-legitimate
+    filename doesn't lose (or get a mangled) extension - that would cause a
+    real file to fail the extension-vs-declared-content-type check in
+    `_validate_file` purely because of where the cut landed, not because
+    anything was actually wrong with it."""
+    if len(name) <= _MAX_FILENAME_LENGTH:
+        return name
+    if "." not in name:
+        return name[:_MAX_FILENAME_LENGTH]
+    stem, _, ext = name.rpartition(".")
+    ext = "." + ext
+    if len(ext) >= _MAX_FILENAME_LENGTH:
+        # A pathological "extension" (no real dot found, or an absurdly long
+        # trailing segment) - fall back to a plain tail truncation rather
+        # than producing an empty stem.
+        return name[:_MAX_FILENAME_LENGTH]
+    return stem[: _MAX_FILENAME_LENGTH - len(ext)] + ext
+
+
 def sanitize_filename(filename: str | None, *, default: str = "file") -> str:
     name = (filename or "").strip()
     # Strip any directory component a client might send (path traversal
@@ -56,7 +77,7 @@ def sanitize_filename(filename: str | None, *, default: str = "file") -> str:
     name = name.replace("\\", "/").rsplit("/", 1)[-1]
     name = _UNSAFE_FILENAME_CHARS_RE.sub("_", name)
     name = name.lstrip(".-")  # no leading dots/dashes (hidden files, "-rf" style args)
-    name = name[:_MAX_FILENAME_LENGTH]
+    name = _truncate_preserving_extension(name)
     return name or default
 
 

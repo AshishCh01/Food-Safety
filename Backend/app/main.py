@@ -11,6 +11,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.router import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.core.middleware import MaxBodySizeMiddleware
 from app.utils.exceptions import AppError
 
 configure_logging()
@@ -26,6 +27,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)
+
+# Registered before error_handling_middleware below (and therefore ends up
+# INNERMOST of the three custom layers here, closest to routing - see that
+# function's docstring for the general prepend-reverses-order rule). This
+# positioning is load-bearing, not just ordering-for-ordering's-sake: a
+# custom exception raised while reading an oversized streamed body (no
+# unregistered exception handler exists for it) needs to reach
+# MaxBodySizeMiddleware's own try/except before it would otherwise be
+# swallowed as a generic 500 by error_handling_middleware's broader
+# `except Exception` a layer further out.
+app.add_middleware(MaxBodySizeMiddleware)
 
 
 @app.middleware("http")

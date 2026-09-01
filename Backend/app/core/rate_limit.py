@@ -53,12 +53,27 @@ login_rate_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60)
 register_rate_limiter = InMemoryRateLimiter(max_requests=5, window_seconds=60)
 refresh_rate_limiter = InMemoryRateLimiter(max_requests=30, window_seconds=60)
 complaint_creation_rate_limiter = InMemoryRateLimiter(max_requests=20, window_seconds=60)
+# Evidence/RAG-document uploads were previously unthrottled - each request
+# can carry up to MAX_EVIDENCE_FILE_SIZE_BYTES / rag_max_upload_size_mb of
+# body plus a synchronous Supabase Storage round-trip, so repeated large
+# uploads are a real bandwidth/disk amplification vector even with the
+# request-size cap in app/core/middleware.py (docs/PROJECT_AUDIT_REPORT.md
+# finding 1.6). Kept as separate limiter instances per endpoint (rather than
+# one shared bucket) so hammering one doesn't exhaust the quota for another.
+citizen_evidence_upload_rate_limiter = InMemoryRateLimiter(max_requests=20, window_seconds=60)
+inspector_evidence_upload_rate_limiter = InMemoryRateLimiter(max_requests=20, window_seconds=60)
+# Admin-only and comparatively rare (knowledge-base document management),
+# so a tighter quota than the evidence limiters is appropriate.
+rag_document_upload_rate_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60)
 
 ALL_RATE_LIMITERS = (
     login_rate_limiter,
     register_rate_limiter,
     refresh_rate_limiter,
     complaint_creation_rate_limiter,
+    citizen_evidence_upload_rate_limiter,
+    inspector_evidence_upload_rate_limiter,
+    rag_document_upload_rate_limiter,
 )
 
 

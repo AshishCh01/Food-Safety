@@ -25,6 +25,16 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173"
 
+    # Global request-body size cap enforced before Starlette/python-multipart
+    # ever buffers the body (app/core/middleware.py) - comfortably above the
+    # largest legitimate upload (rag_max_upload_size_mb=20MB by default,
+    # evidence's 15MB constant in app/utils/validators.py) plus multipart
+    # boundary/header/JSON overhead. Without this, a client could force the
+    # server to fully receive and disk-spool an arbitrarily large request
+    # before app/utils/uploads.py's own bounded read ever got a chance to
+    # reject it (docs/PROJECT_AUDIT_REPORT.md finding 1.6).
+    max_request_body_size_mb: int = 25
+
     jwt_secret_key: SecretStr = SecretStr(_INSECURE_DEFAULT_JWT_SECRET)
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30

@@ -175,6 +175,32 @@ def test_upload_evidence_success(client: TestClient, db_session: Session, monkey
     assert len(body["checksum"]) == 64
 
 
+def test_evidence_upload_is_rate_limited_after_repeated_attempts(
+    client: TestClient, db_session: Session, monkeypatch
+) -> None:
+    from app.core.rate_limit import citizen_evidence_upload_rate_limiter
+
+    _, district, category, citizen = _setup(db_session)
+    created = client.post(
+        "/api/v1/complaints", json=_complaint_payload(district.id, category.id), headers=auth_headers(citizen)
+    ).json()
+
+    monkeypatch.setattr(storage_service, "upload_file", lambda bucket, path, content, content_type: path)
+
+    responses = [
+        client.post(
+            f"/api/v1/complaints/{created['id']}/evidence",
+            headers=auth_headers(citizen),
+            files={"file": ("photo.jpg", FAKE_JPEG_BYTES, "image/jpeg")},
+        )
+        for _ in range(citizen_evidence_upload_rate_limiter.max_requests + 1)
+    ]
+
+    assert all(r.status_code == 201 for r in responses[:-1])
+    assert responses[-1].status_code == 429
+    assert responses[-1].json()["error"]["code"] == "RATE_LIMIT_EXCEEDED"
+
+
 def test_upload_evidence_rejects_unsupported_type(client: TestClient, db_session: Session, monkeypatch) -> None:
     _, district, category, citizen = _setup(db_session)
     created = client.post(

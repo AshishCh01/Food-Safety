@@ -304,7 +304,7 @@ Typical runtime command:
 uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
 ```
 
-`--proxy-headers --forwarded-allow-ips='*'` is required behind Render's edge proxy so `request.client.host` (used by the per-IP rate limiter, `app/core/rate_limit.py`) reflects the real client rather than Render's internal proxy address for every request - see `docs/DEPLOYMENT.md` section 11.
+`--proxy-headers --forwarded-allow-ips='*'` is required behind Render's edge proxy so `request.client.host` (used by the per-IP rate limiter, `app/core/rate_limit.py`) reflects the real client rather than Render's internal proxy address for every request - see `docs/DEPLOYMENT.md` section 12.
 
 The exact Render build/start configuration should match the repository's actual package manager and dependency files.
 

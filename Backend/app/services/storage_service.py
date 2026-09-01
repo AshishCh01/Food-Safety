@@ -70,6 +70,37 @@ def download_file(bucket: str, path: str) -> bytes:
     return response.content
 
 
+def get_bucket_public(bucket: str) -> bool | None:
+    """Queries Supabase Storage's bucket-info endpoint to check whether
+    `bucket` is configured public. All the ownership/RBAC checks in
+    evidence_service.py/rag_document_service.py only govern the backend
+    API - if the underlying bucket itself is ever misconfigured public
+    (a single checkbox in the Supabase dashboard), every uploaded file
+    becomes fetchable directly with no authorization at all
+    (docs/SECURITY_AND_RBAC.md section 8). See scripts/check_storage_bucket_privacy.py,
+    the periodic check that uses this.
+
+    Returns `None` (rather than raising) when the check could not be
+    completed - a network error, non-200 response, or unexpected response
+    shape - so a transient Supabase outage doesn't masquerade as a
+    confirmed-private result. Callers must treat `None` as "unknown", never
+    as "confirmed private"."""
+    settings = get_settings()
+    if not settings.supabase_url:
+        return None
+    url = f"{settings.supabase_url}/storage/v1/bucket/{bucket}"
+    try:
+        response = _client().get(url, headers=_headers(), timeout=10.0)
+    except httpx.HTTPError:
+        return None
+    if response.status_code != 200:
+        return None
+    try:
+        return bool(response.json().get("public"))
+    except ValueError:
+        return None
+
+
 def create_signed_url(bucket: str, path: str, expires_in: int = 300) -> str:
     settings = get_settings()
     url = f"{settings.supabase_url}/storage/v1/object/sign/{bucket}/{path}"
