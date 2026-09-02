@@ -20,6 +20,7 @@ from app.utils.exceptions import (
     GeminiRateLimitedError,
     GeminiRequestError,
     GeminiUnavailableError,
+    GroqUnavailableError,
     InvalidAiResponseError,
 )
 
@@ -218,14 +219,18 @@ def test_server_error_retries_then_fails_after_max_attempts(db_session: Session,
         raise GeminiUnavailableError()
 
     monkeypatch.setattr(ai_service, "generate_structured_json", _always_fail)
+    # Gemini exhausting retries now falls through to the Groq fallback (see
+    # app.agents.complaint_triage.agent) - fail that too, so this test still
+    # exercises (and asserts on) the final, no-provider-available outcome.
+    monkeypatch.setattr(ai_service, "generate_structured_json_groq", lambda *a, **k: (_ for _ in ()).throw(GroqUnavailableError()))
 
-    with pytest.raises(GeminiUnavailableError):
+    with pytest.raises(GroqUnavailableError):
         complaint_triage_agent.run_triage(db_session, officer, complaint)
 
     assert calls["count"] == complaint_triage_agent._MAX_ATTEMPTS
     latest = complaint_triage_agent.get_latest_triage(db_session, complaint.id)
     assert latest.status == TriageStatus.FAILED
-    assert latest.error_code == "GEMINI_UNAVAILABLE"
+    assert latest.error_code == "GROQ_UNAVAILABLE"
 
 
 def test_original_complaint_description_untouched_after_triage(db_session: Session, monkeypatch) -> None:

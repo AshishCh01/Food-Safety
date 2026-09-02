@@ -266,10 +266,17 @@ def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, q
     business = complaint.business if complaint is not None else None
     has_case_context = inspection is not None
 
+    intent_prompt = _build_intent_prompt(question, history_text, has_case_context)
     try:
-        intent_raw = _call_gemini_with_retry(
-            _build_intent_prompt(question, history_text, has_case_context), _intent_schema()
-        )
+        intent_raw = _call_gemini_with_retry(intent_prompt, _intent_schema())
+    except (GeminiRateLimitedError, GeminiUnavailableError) as exc:
+        if not settings.groq_api_key.get_secret_value():
+            return _persist_failure(db, conversation, model_used, exc.code, exc.message)
+        try:
+            intent_raw = ai_service.generate_structured_json_groq(intent_prompt)
+            model_used = settings.groq_fallback_model
+        except AppError as fallback_exc:
+            return _persist_failure(db, conversation, model_used, fallback_exc.code, fallback_exc.message)
     except AppError as exc:
         return _persist_failure(db, conversation, model_used, exc.code, exc.message)
 
@@ -323,11 +330,17 @@ def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, q
             app_blocks.append((f"A{app_index}", "Evidence analysis for this inspection", evidence))
             app_index += 1
 
+    answer_prompt = _build_answer_prompt(question, history_text, rag_blocks, app_blocks, regulatory_search_attempted)
     try:
-        answer_raw = _call_gemini_with_retry(
-            _build_answer_prompt(question, history_text, rag_blocks, app_blocks, regulatory_search_attempted),
-            _answer_schema(),
-        )
+        answer_raw = _call_gemini_with_retry(answer_prompt, _answer_schema())
+    except (GeminiRateLimitedError, GeminiUnavailableError) as exc:
+        if not settings.groq_api_key.get_secret_value():
+            return _persist_failure(db, conversation, model_used, exc.code, exc.message)
+        try:
+            answer_raw = ai_service.generate_structured_json_groq(answer_prompt)
+            model_used = settings.groq_fallback_model
+        except AppError as fallback_exc:
+            return _persist_failure(db, conversation, model_used, fallback_exc.code, fallback_exc.message)
     except AppError as exc:
         return _persist_failure(db, conversation, model_used, exc.code, exc.message)
 

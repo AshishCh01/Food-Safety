@@ -67,6 +67,17 @@ class Settings(BaseSettings):
     gemini_embedding_dimensions: int = 768
     gemini_request_timeout_seconds: float = 60.0
 
+    # Fallback provider for the text agents (complaint triage, investigation,
+    # inspector assistant) when Gemini is rate-limited or unavailable - see
+    # app.services.ai_service.generate_structured_json_groq. Deliberately not
+    # used for evidence analysis (needs vision; groq/compound is an agentic
+    # web-search/code-exec system, a poor fit for analyzing untrusted
+    # uploaded content) or embeddings (a different model produces vectors in
+    # a different, non-comparable space from the stored Gemini embeddings).
+    groq_api_key: SecretStr = SecretStr("")
+    groq_fallback_model: str = "qwen/qwen3.6-27b"
+    groq_request_timeout_seconds: float = 30.0
+
     rag_storage_bucket: str = "rag-documents"
     rag_max_upload_size_mb: int = 20
     rag_retrieval_top_k: int = 6

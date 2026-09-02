@@ -326,6 +326,16 @@ def run_investigation(
 
     try:
         raw_text = _call_gemini_with_retry(prompt, _response_schema())
+    except (GeminiRateLimitedError, GeminiUnavailableError) as exc:
+        if not settings.groq_api_key.get_secret_value():
+            _persist_failure(db, complaint, staff, model_used, exc.code, exc.message)
+            raise
+        try:
+            raw_text = ai_service.generate_structured_json_groq(prompt)
+            model_used = settings.groq_fallback_model
+        except AppError as fallback_exc:
+            _persist_failure(db, complaint, staff, model_used, fallback_exc.code, fallback_exc.message)
+            raise
     except AppError as exc:
         _persist_failure(db, complaint, staff, model_used, exc.code, exc.message)
         raise

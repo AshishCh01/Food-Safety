@@ -14,7 +14,7 @@ from app.tests.factories import (
     create_user,
 )
 from app.utils.enums import UserRole
-from app.utils.exceptions import GeminiUnavailableError
+from app.utils.exceptions import GeminiUnavailableError, GroqUnavailableError
 
 
 def _valid_payload() -> str:
@@ -230,20 +230,24 @@ def test_gemini_failure_returns_service_unavailable_and_persists_failure(
 
     monkeypatch.setattr(ai_service, "generate_structured_json", _raise)
     monkeypatch.setattr(investigation_agent.time, "sleep", lambda *a, **k: None)
+    # Gemini exhausting retries now falls through to the Groq fallback (see
+    # app.agents.investigation.agent) - fail that too, so this test still
+    # exercises (and asserts on) the final, no-provider-available outcome.
+    monkeypatch.setattr(ai_service, "generate_structured_json_groq", lambda *a, **k: (_ for _ in ()).throw(GroqUnavailableError()))
 
     response = client.post(
         f"/api/v1/officer/complaints/{pune_complaint.id}/investigation", headers=auth_headers(pune_officer)
     )
 
     assert response.status_code == 503
-    assert response.json()["error"]["code"] == "GEMINI_UNAVAILABLE"
+    assert response.json()["error"]["code"] == "GROQ_UNAVAILABLE"
 
     get_response = client.get(
         f"/api/v1/officer/complaints/{pune_complaint.id}/investigation", headers=auth_headers(pune_officer)
     )
     assert get_response.status_code == 200
     assert get_response.json()["status"] == "failed"
-    assert get_response.json()["error_code"] == "GEMINI_UNAVAILABLE"
+    assert get_response.json()["error_code"] == "GROQ_UNAVAILABLE"
 
 
 def test_running_investigation_never_changes_complaint_status(

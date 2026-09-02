@@ -221,7 +221,7 @@ def test_empty_knowledge_base_states_insufficient_information(
 def test_gemini_failure_returns_clean_error_message_not_fabricated_200(
     client: TestClient, db_session: Session, monkeypatch
 ) -> None:
-    from app.utils.exceptions import GeminiUnavailableError
+    from app.utils.exceptions import GeminiUnavailableError, GroqUnavailableError
 
     inspector, _other, _officer, _citizen, _inspection, _other_inspection = _setup(db_session)
 
@@ -232,6 +232,11 @@ def test_gemini_failure_returns_clean_error_message_not_fabricated_200(
     from app.agents.inspector_assistant import agent as inspector_assistant_agent
 
     monkeypatch.setattr(inspector_assistant_agent.time, "sleep", lambda *a, **k: None)
+    # Gemini exhausting retries now falls through to the Groq fallback (see
+    # app.agents.inspector_assistant.agent) - fail that too, so this test
+    # still exercises (and asserts on) the final, no-provider-available
+    # outcome.
+    monkeypatch.setattr(ai_service, "generate_structured_json_groq", lambda *a, **k: (_ for _ in ()).throw(GroqUnavailableError()))
 
     create_response = client.post(
         "/api/v1/inspector/assistant/conversations", headers=auth_headers(inspector), json={}
@@ -246,7 +251,7 @@ def test_gemini_failure_returns_clean_error_message_not_fabricated_200(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["error_code"] == "GEMINI_UNAVAILABLE"
+    assert body["error_code"] == "GROQ_UNAVAILABLE"
 
 
 def test_malformed_ai_response_returns_502(client: TestClient, db_session: Session, monkeypatch) -> None:

@@ -211,6 +211,42 @@ class GeminiRequestError(AppError):
         super().__init__(message)
 
 
+class GroqRateLimitedError(AppError):
+    """Raised when the Groq fallback API rejects a request for exceeding its
+    rate limit (see app.services.ai_service.generate_structured_json_groq).
+    Not retried further - Groq is already the fallback for a failed Gemini
+    call, so a second failure is surfaced to the caller as a normal AI
+    failure rather than chaining another fallback."""
+
+    code = "GROQ_RATE_LIMITED"
+    status_code = 429
+
+    def __init__(self, message: str = "The fallback AI service is receiving too many requests.") -> None:
+        super().__init__(message)
+
+
+class GroqUnavailableError(AppError):
+    """Raised for Groq server errors, timeouts, or other transport-level
+    failures while serving a Gemini fallback request."""
+
+    code = "GROQ_UNAVAILABLE"
+    status_code = 503
+
+    def __init__(self, message: str = "The fallback AI service is temporarily unavailable.") -> None:
+        super().__init__(message)
+
+
+class GroqRequestError(AppError):
+    """Raised for non-retryable Groq request failures (e.g. an invalid
+    request rejected by the API for reasons other than rate limiting)."""
+
+    code = "GROQ_REQUEST_FAILED"
+    status_code = 502
+
+    def __init__(self, message: str = "The fallback AI service could not process this request.") -> None:
+        super().__init__(message)
+
+
 class InvalidAiResponseError(AppError):
     code = "INVALID_AI_RESPONSE"
     status_code = 502

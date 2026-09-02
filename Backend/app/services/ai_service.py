@@ -9,18 +9,34 @@ All Gemini SDK exceptions are normalized to the app's own `AppError`
 subclasses here so that callers (agents/services) never need to import or
 handle `google.genai.errors` directly - this is the one place API failures,
 timeouts, and rate limits are translated into a small, stable error set.
+
+Also provides `generate_structured_json_groq`, a Groq-backed fallback for the
+text agents (see that function's docstring and each agent's Gemini-call site
+for the fallback policy) - a separate function rather than a hidden branch
+inside `generate_structured_json`, since Groq isn't schema-constrained the
+way Gemini's structured output is and callers opt into it explicitly.
 """
 
 import logging
 
+import httpx
 from google.genai import errors as genai_errors
 from google.genai import types
 
 from app.core.config import get_settings
 from app.core.gemini import get_gemini_client
-from app.utils.exceptions import GeminiRateLimitedError, GeminiRequestError, GeminiUnavailableError
+from app.utils.exceptions import (
+    GeminiRateLimitedError,
+    GeminiRequestError,
+    GeminiUnavailableError,
+    GroqRateLimitedError,
+    GroqRequestError,
+    GroqUnavailableError,
+)
 
 logger = logging.getLogger(__name__)
+
+_GROQ_CHAT_COMPLETIONS_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
 def generate_text(prompt: str, *, use_reasoning_model: bool = False) -> str:
@@ -83,6 +99,57 @@ def generate_structured_json_with_media(
     if not response.text:
         raise GeminiRequestError("The AI service returned an empty response.")
     return response.text
+
+
+def generate_structured_json_groq(prompt: str) -> str:
+    """Fallback JSON completion via Groq (OpenAI-compatible API), used by the
+    text agents (complaint triage, investigation, inspector assistant) when
+    Gemini is rate-limited or unavailable - see each agent's `_call_llm`
+    for the fallback policy. Deliberately not used for evidence analysis
+    (needs vision - see docs/AI_AGENTS_ARCHITECTURE.md) or embeddings (a
+    different model's vectors aren't comparable to the stored Gemini ones).
+
+    Unlike `generate_structured_json`, this isn't schema-constrained
+    server-side - Groq's JSON mode only guarantees syntactically valid JSON,
+    not a specific shape. That's fine here because every caller's prompt
+    already fully spells out the required fields in its instructions (the
+    same prompt text used for the Gemini call); callers validate the result
+    against their own Pydantic model exactly as they do for Gemini.
+    """
+    settings = get_settings()
+    api_key = settings.groq_api_key.get_secret_value()
+    if not api_key:
+        raise GroqRequestError("No Groq fallback API key is configured.")
+
+    try:
+        response = httpx.post(
+            _GROQ_CHAT_COMPLETIONS_URL,
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": settings.groq_fallback_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "response_format": {"type": "json_object"},
+            },
+            timeout=settings.groq_request_timeout_seconds,
+        )
+    except httpx.HTTPError as exc:
+        raise GroqUnavailableError("The fallback AI service did not respond in time.") from exc
+
+    if response.status_code == 429:
+        raise GroqRateLimitedError()
+    if response.status_code >= 500:
+        raise GroqUnavailableError()
+    if response.status_code >= 400:
+        # response.text is vendor-generated (key/config/schema complaints) -
+        # logged for operators, never surfaced verbatim to an API client, same
+        # policy as _normalize_api_error below.
+        logger.warning("Groq fallback request rejected (status=%s): %s", response.status_code, response.text)
+        raise GroqRequestError()
+
+    content = response.json()["choices"][0]["message"]["content"]
+    if not content:
+        raise GroqRequestError("The fallback AI service returned an empty response.")
+    return content
 
 
 def embed_text(text: str) -> list[float]:

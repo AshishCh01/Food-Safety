@@ -18,7 +18,12 @@ from app.tests.factories import (
     create_user,
 )
 from app.utils.enums import AssistantMessageRole, UserRole
-from app.utils.exceptions import GeminiRequestError, GeminiUnavailableError, InvalidAiResponseError
+from app.utils.exceptions import (
+    GeminiRequestError,
+    GeminiUnavailableError,
+    GroqUnavailableError,
+    InvalidAiResponseError,
+)
 
 _INTENT_NONE = {
     "needs_regulatory_search": False,
@@ -260,10 +265,15 @@ def test_gemini_failure_at_answer_stage_persists_failed_message_without_crash(
 
     monkeypatch.setattr(ai_service, "generate_structured_json", _raise)
     monkeypatch.setattr(inspector_assistant_agent.time, "sleep", lambda *a, **k: None)
+    # Gemini exhausting retries now falls through to the Groq fallback (see
+    # app.agents.inspector_assistant.agent) - fail that too, so this test
+    # still exercises (and asserts on) the final, no-provider-available
+    # outcome.
+    monkeypatch.setattr(ai_service, "generate_structured_json_groq", lambda *a, **k: (_ for _ in ()).throw(GroqUnavailableError()))
 
     message = inspector_assistant_agent.ask(db_session, staff, conversation, "Question")
 
-    assert message.error_code == "GEMINI_UNAVAILABLE"
+    assert message.error_code == "GROQ_UNAVAILABLE"
 
 
 def test_application_data_used_shown_even_if_model_ignores_it(db_session: Session, monkeypatch) -> None:

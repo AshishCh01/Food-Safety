@@ -23,6 +23,7 @@ from app.utils.exceptions import (
     GeminiRateLimitedError,
     GeminiRequestError,
     GeminiUnavailableError,
+    GroqUnavailableError,
     InvalidAiResponseError,
 )
 
@@ -245,8 +246,12 @@ def test_server_error_retries_then_fails_after_max_attempts(db_session: Session,
         raise GeminiUnavailableError()
 
     monkeypatch.setattr(ai_service, "generate_structured_json", _always_fail)
+    # Gemini exhausting retries now falls through to the Groq fallback (see
+    # app.agents.investigation.agent) - fail that too, so this test still
+    # exercises (and asserts on) the final, no-provider-available outcome.
+    monkeypatch.setattr(ai_service, "generate_structured_json_groq", lambda *a, **k: (_ for _ in ()).throw(GroqUnavailableError()))
 
-    with pytest.raises(GeminiUnavailableError):
+    with pytest.raises(GroqUnavailableError):
         investigation_agent.run_investigation(db_session, officer, complaint)
 
     assert calls["count"] == investigation_agent._MAX_ATTEMPTS
