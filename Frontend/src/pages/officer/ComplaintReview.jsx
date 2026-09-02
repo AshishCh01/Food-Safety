@@ -47,7 +47,7 @@ import {
 // transitions (verified->assigned->...->inspection_completed) are not
 // listed here since they only happen through their own dedicated actions.
 const ALLOWED_TRANSITIONS = {
-  submitted: ['under_review', 'rejected', 'duplicate', 'insufficient_evidence'],
+  submitted: ['under_review', 'verified', 'rejected', 'duplicate', 'insufficient_evidence'],
   under_review: ['needs_information', 'verified', 'rejected', 'duplicate', 'insufficient_evidence'],
   needs_information: ['under_review', 'rejected'],
   inspection_completed: ['action_in_progress', 'resolved', 'closed'],

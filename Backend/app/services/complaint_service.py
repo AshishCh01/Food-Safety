@@ -41,6 +41,7 @@ from app.utils.geo import validate_coordinates
 ALLOWED_TRANSITIONS: dict[ComplaintStatus, set[ComplaintStatus]] = {
     ComplaintStatus.SUBMITTED: {
         ComplaintStatus.UNDER_REVIEW,
+        ComplaintStatus.VERIFIED,
         ComplaintStatus.REJECTED,
         ComplaintStatus.DUPLICATE,
         ComplaintStatus.INSUFFICIENT_EVIDENCE,
