@@ -23,6 +23,13 @@ function AssistantChat({ messages, onSend, isSending, error, isLoading }) {
     setQuestion('');
   }
 
+  function handleKeyDown(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      handleSubmit(event);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       {isLoading && <Spinner label="Loading conversation…" />}
@@ -44,6 +51,7 @@ function AssistantChat({ messages, onSend, isSending, error, isLoading }) {
         <Textarea
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="Ask a question…"
           disabled={isSending || isLoading}
           rows={2}
