@@ -1,7 +1,9 @@
+import json
 import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.agents.evidence_analysis import agent as evidence_analysis_agent
@@ -336,3 +338,24 @@ def send_assistant_message(
     conversation = assistant_service.get_conversation_for_inspector(db, staff, conversation_id)
     message = assistant_service.ask(db, staff, conversation, payload.question)
     return assistant_service.to_message_read(message)
+
+
+@router.post("/assistant/conversations/{conversation_id}/messages/stream")
+def send_assistant_message_stream(
+    conversation_id: uuid.UUID,
+    payload: AssistantMessageCreateRequest,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Streams the Inspector Assistant response token-by-token using Server-Sent Events (SSE)."""
+    conversation = assistant_service.get_conversation_for_inspector(db, staff, conversation_id)
+
+    def event_generator():
+        for item in assistant_service.ask_stream(db, staff, conversation, payload.question):
+            if isinstance(item, dict):
+                yield f"data: {json.dumps(item)}\n\n"
+            else:
+                yield f"data: {json.dumps({'type': 'token', 'content': item})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+

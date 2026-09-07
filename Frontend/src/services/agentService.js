@@ -1,8 +1,4 @@
-import { apiRequest } from './api';
-
-// AI Complaint Triage Agent (Phase 6). Advisory only - see
-// docs/AI_AGENTS_ARCHITECTURE.md section 4. Reading the latest result never
-// triggers a new Gemini call; only runComplaintTriage does.
+import { apiRequest, API_V1_BASE_URL } from './api';
 
 export function getComplaintTriage(complaintId, token) {
   return apiRequest(`/officer/complaints/${complaintId}/triage`, { token });
@@ -85,6 +81,58 @@ export function sendAssistantMessage(conversationId, question, token) {
     token,
     body: { question },
   });
+}
+
+export async function sendAssistantMessageStream(conversationId, question, token, { onToken, onDone, onError }) {
+  const url = `${API_V1_BASE_URL}/inspector/assistant/conversations/${conversationId}/messages/stream`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ question }),
+    });
+
+    if (!response.ok) {
+      const errJson = await response.json().catch(() => ({}));
+      throw new Error(errJson?.error?.message || 'Failed to stream response');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('data: ')) {
+          const raw = trimmed.slice(6);
+          try {
+            const data = JSON.parse(raw);
+            if (data.type === 'token' && onToken) {
+              onToken(data.content);
+            } else if (data.type === 'done' && onDone) {
+              onDone(data);
+            }
+          } catch {
+            if (onToken) onToken(raw);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    if (onError) onError(err);
+    else throw err;
+  }
 }
 
 // Voice channel (LiveKit) - see docs/AI_AGENTS_ARCHITECTURE.md section 7.

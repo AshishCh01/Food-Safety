@@ -1,5 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const API_V1_BASE_URL = `${API_BASE_URL}/api/v1`;
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+export const API_V1_BASE_URL = `${API_BASE_URL}/api/v1`;
 
 const ACCESS_TOKEN_KEY = 'fsp_access_token';
 const REFRESH_TOKEN_KEY = 'fsp_refresh_token';

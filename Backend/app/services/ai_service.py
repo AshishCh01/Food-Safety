@@ -205,6 +205,25 @@ def stream_text_groq(prompt: str):
     except httpx.HTTPError as exc:
         raise GroqUnavailableError("The fallback AI service did not respond in time.") from exc
 
+
+def stream_text_gemini(prompt: str, *, use_reasoning_model: bool = False):
+    """Streams a plain-text completion via Gemini SDK's generate_content_stream.
+    Yields text deltas as they arrive."""
+    settings = get_settings()
+    client = get_gemini_client()
+    model = settings.gemini_reasoning_model if use_reasoning_model else settings.gemini_main_model
+    config = types.GenerateContentConfig(http_options=_http_options(settings))
+    try:
+        response_stream = client.models.generate_content_stream(model=model, contents=prompt, config=config)
+        for chunk in response_stream:
+            if chunk.text:
+                yield chunk.text
+    except genai_errors.APIError as exc:
+        raise _normalize_api_error(exc) from exc
+    except Exception as exc:
+        raise GeminiUnavailableError("The AI service did not respond in time.") from exc
+
+
 def embed_text(text: str) -> list[float]:
     """Returns an embedding vector for the given text using the configured embedding
     model, truncated/normalized to `settings.gemini_embedding_dimensions` so every

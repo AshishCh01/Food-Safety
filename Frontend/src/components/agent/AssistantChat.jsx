@@ -77,7 +77,10 @@ function AssistantMessageBubble({ message }) {
       }
     >
       <p className="mb-0.5 text-xs font-semibold text-slate-500">{isUser ? 'You' : 'Assistant'}</p>
-      <p className="whitespace-pre-wrap text-sm text-slate-800">{message.content}</p>
+      <p className="whitespace-pre-wrap text-sm text-slate-800">
+        {message.content}
+        {message.isStreaming && <span className="ml-1 inline-block h-3.5 w-1.5 animate-pulse bg-brand-600 align-middle" />}
+      </p>
 
       {!isUser && message.error_code && (
         <Alert tone="danger" className="mt-2">

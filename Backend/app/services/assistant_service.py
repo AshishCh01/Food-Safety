@@ -142,6 +142,10 @@ def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, q
     return inspector_assistant_agent.ask(db, staff, conversation, question)
 
 
+def ask_stream(db: Session, staff: StaffProfile, conversation: AssistantConversation, question: str):
+    return inspector_assistant_agent.ask_stream(db, staff, conversation, question)
+
+
 def to_message_read(message: AssistantMessage) -> AssistantMessageRead:
     return AssistantMessageRead(
         id=message.id,

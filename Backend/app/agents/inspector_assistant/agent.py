@@ -231,6 +231,72 @@ answer the question, or the question was out of scope (see above).
 """
 
 
+def _build_streaming_answer_prompt(
+    question: str,
+    history_text: str,
+    rag_blocks: list[tuple[str, RetrievedChunk]],
+    app_blocks: list[tuple[str, str, dict]],
+    rag_had_zero_relevant_matches: bool,
+) -> str:
+    """Prompt for the streaming answer path.
+
+    Unlike _build_answer_prompt (which asks for a JSON object), this prompt
+    asks the model to write a plain spoken answer directly. The model embeds
+    inline citation markers like [R1] or [A2] inside the prose; ask_stream
+    then extracts them by regex after streaming finishes to build the citation
+    list. This way the TTS pipeline receives clean, speakable text rather
+    than a raw JSON blob.
+    """
+    rag_section = "\n\n".join(
+        f'[{block_id}] Source: {chunk.document_title}'
+        f'{f" ({chunk.source_organization})" if chunk.source_organization else ""}'
+        f'{f", page {chunk.page_number}" if chunk.page_number else ""}'
+        f'{f", section \"{chunk.section_title}\"" if chunk.section_title else ""}\n{chunk.content}'
+        for block_id, chunk in rag_blocks
+    ) or "(none relevant)"
+
+    app_section = "\n\n".join(
+        f"[{block_id}] {label}:\n{json.dumps(data, default=str)}" for block_id, label, data in app_blocks
+    ) or "(none)"
+
+    no_results_note = (
+        "\nIMPORTANT: No relevant regulatory documents were found. Do NOT answer from general "
+        "knowledge. Tell the inspector you could not find enough authoritative information and "
+        "that they should consult official sources.\n"
+        if rag_had_zero_relevant_matches
+        else ""
+    )
+
+    return f"""You are the Inspector Assistant for a government food-safety department, helping an \
+authorized field inspector in the field via voice.
+
+Rules:
+- Write a plain spoken answer - NO JSON, NO markdown, NO bullet-point symbols, NO asterisks.
+- Keep your answer concise and speakable (3-6 sentences maximum).
+- Every regulatory or factual claim must be supported by one of the numbered source blocks below.
+  Cite them inline using their ID, e.g. "According to [R1], ..." or "As per [R2], ...".
+- If you lack a source block supporting a claim, say you do not have enough authoritative \
+information. Never invent facts.
+- If the question is unrelated to food safety, politely decline in one sentence.
+
+Conversation so far:
+{history_text}
+
+Inspector's question:
+\"\"\"
+{question}
+\"\"\"
+
+Retrieved regulatory/guideline excerpts:
+{rag_section}
+
+Authorized case data:
+{app_section}
+{no_results_note}
+Write your spoken answer now, using plain prose only:"""
+
+
+
 def _call_gemini_with_retry(prompt: str, response_schema: dict) -> str:
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         try:
@@ -285,21 +351,175 @@ def _persist_quick_reply(db: Session, conversation: AssistantConversation, conte
     return message
 
 
-async def ask_stream(
+def ask_stream(
     db: Session,
     staff: StaffProfile,
     conversation: AssistantConversation,
     question: str,
 ):
-    """Compatibility wrapper for the voice router.
-
-    The current Inspector Assistant implementation produces one complete
-    response via `ask()`. Yield that response as a single stream item so
-    callers importing `ask_stream` continue to work without changing the
-    existing answer pipeline.
+    """Runs one turn of the Inspector Assistant with live token streaming.
+    Yields text delta strings as tokens arrive, followed by a final dict payload:
+    {"type": "done", "message_id": ..., "citations": [...], ...}
     """
-    message = ask(db, staff, conversation, question)
-    yield message
+    import re
+
+    settings = get_settings()
+    model_used = settings.gemini_main_model
+
+    user_message = AssistantMessage(conversation_id=conversation.id, role=AssistantMessageRole.USER, content=question)
+    assistant_repository.create_message(db, user_message)
+    if conversation.title is None:
+        conversation.title = question[:255]
+    db.commit()
+
+    # Fast-path: common greetings/short phrases need no RAG call
+    quick_reply = _quick_reply_for(question)
+    if quick_reply is not None:
+        message = _persist_quick_reply(db, conversation, quick_reply)
+        yield quick_reply
+        yield {
+            "type": "done",
+            "message_id": str(message.id),
+            "citations": [],
+            "application_data_used": [],
+            "is_uncertain": False,
+            "uncertainty_reason": None,
+        }
+        return
+
+    prior_messages = assistant_repository.list_messages(db, conversation.id)
+    history_text = _format_history(prior_messages)
+
+    # Read case context the same way ask() does - directly from conversation relationships
+    inspection = conversation.inspection
+    complaint = conversation.complaint
+    business = complaint.business if complaint is not None else None
+    has_case_context = inspection is not None
+
+    # RAG retrieval - mirrors ask() exactly
+    business_type = business.business_type if business is not None else None
+    try:
+        chunks: list[RetrievedChunk] = []
+        chunks += tools.search_regulations(db, question, business_type=business_type)
+        chunks += tools.search_inspection_guidelines(db, question, business_type=business_type)
+    except AppError as exc:
+        err_msg = _persist_failure(db, conversation, model_used, exc.code, exc.message)
+        yield {
+            "type": "done",
+            "message_id": str(err_msg.id),
+            "citations": [],
+            "application_data_used": [],
+            "is_uncertain": True,
+            "uncertainty_reason": exc.message,
+        }
+        return
+
+    relevant_chunks = [chunk for chunk in chunks if chunk.score >= _MIN_RAG_RELEVANCE_SCORE]
+    rag_blocks = [(f"R{i + 1}", chunk) for i, chunk in enumerate(relevant_chunks)]
+    rag_had_zero_relevant_matches = len(rag_blocks) == 0
+
+    # App-context blocks - mirrors ask() exactly
+    app_blocks: list[tuple[str, str, dict]] = []
+    if has_case_context:
+        app_index = 1
+        if complaint is not None:
+            app_blocks.append((f"A{app_index}", "Current complaint", tools.get_complaint(complaint)))
+            app_index += 1
+        if business is not None:
+            app_blocks.append((f"A{app_index}", "Business information", tools.get_business(business)))
+            app_index += 1
+            previous = tools.get_previous_complaints(
+                db, business, staff, exclude_complaint_id=complaint.id if complaint else None
+            )
+            app_blocks.append((f"A{app_index}", "Previous complaints at this business", previous))
+            app_index += 1
+            history = tools.get_inspection_history(
+                db, business, staff, exclude_inspection_id=inspection.id if inspection else None
+            )
+            app_blocks.append((f"A{app_index}", "Prior inspections at this business", history))
+            app_index += 1
+        if inspection is not None:
+            evidence = tools.get_evidence_analysis(db, inspection)
+            app_blocks.append((f"A{app_index}", "Evidence analysis for this inspection", evidence))
+            app_index += 1
+
+    answer_prompt = _build_streaming_answer_prompt(question, history_text, rag_blocks, app_blocks, rag_had_zero_relevant_matches)
+
+    accumulated = []
+
+    def _stream_generator():
+        nonlocal model_used
+        if settings.groq_api_key.get_secret_value():
+            try:
+                model_used = settings.groq_fallback_model
+                for chunk in ai_service.stream_text_groq(answer_prompt):
+                    yield chunk
+                return
+            except AppError:
+                pass
+        model_used = settings.gemini_main_model
+        for chunk in ai_service.stream_text_gemini(answer_prompt):
+            yield chunk
+
+    try:
+        for chunk in _stream_generator():
+            accumulated.append(chunk)
+            yield chunk
+    except Exception as exc:
+        err_msg = _persist_failure(db, conversation, model_used, "STREAM_ERROR", str(exc))
+        yield {
+            "type": "done",
+            "message_id": str(err_msg.id),
+            "citations": [],
+            "application_data_used": [],
+            "is_uncertain": True,
+            "uncertainty_reason": "Streaming failed partway through.",
+        }
+        return
+
+    full_text = "".join(accumulated)
+
+    used_source_ids = set(re.findall(r'\[(R\d+|A\d+)\]', full_text))
+    rag_block_map = dict(rag_blocks)
+    citations = [
+        {
+            "document_id": chunk.document_id,
+            "title": chunk.document_title,
+            "source_organization": chunk.source_organization,
+            "page_number": chunk.page_number,
+            "section_title": chunk.section_title,
+        }
+        for source_id in used_source_ids
+        if (chunk := rag_block_map.get(source_id)) is not None
+    ]
+    application_data_used = [
+        {"tool": block_id, "label": label, "summary": data}
+        for block_id, label, data in app_blocks
+    ]
+
+    is_uncertain = rag_had_zero_relevant_matches
+    uncertainty_reason = _LOW_CONFIDENCE_UNCERTAINTY_REASON if rag_had_zero_relevant_matches else None
+
+    assistant_message = AssistantMessage(
+        conversation_id=conversation.id,
+        role=AssistantMessageRole.ASSISTANT,
+        content=full_text,
+        citations=citations or None,
+        application_data_used=application_data_used or None,
+        is_uncertain=is_uncertain,
+        uncertainty_reason=uncertainty_reason,
+    )
+    assistant_repository.create_message(db, assistant_message)
+    db.commit()
+
+    yield {
+        "type": "done",
+        "message_id": str(assistant_message.id),
+        "citations": citations,
+        "application_data_used": application_data_used,
+        "is_uncertain": is_uncertain,
+        "uncertainty_reason": uncertainty_reason,
+    }
 
 
 
