@@ -22,6 +22,12 @@ robotic rather than helpful. Instead it schedules the filler on a delay
 (FILLER_DELAY_SECONDS) and llm_node cancels that pending task the moment the
 real answer is ready - so the filler only ever plays when the backend is
 genuinely slow enough to need it.
+
+FIX (this revision): ctx.connect() now runs BEFORE session.start(). Doing
+it in the previous order (start, then connect) handed AgentSession a room
+object that hadn't joined LiveKit yet - it could silently fail to bind
+audio tracks on some dispatches and not others, which is the most likely
+explanation for "works sometimes, not others" with no error in the logs.
 """
 
 import asyncio
@@ -130,17 +136,24 @@ async def entrypoint(ctx: JobContext) -> None:
         logger.error("Voice job dispatched with no voice_session_token in metadata - refusing to start")
         return
 
+    # Join the room FIRST. AgentSession(room=ctx.room) needs the room to
+    # already be connected - starting the session before connecting was
+    # the likely source of the intermittent "sometimes it just doesn't
+    # respond" behavior.
+    await ctx.connect()
+
     session = AgentSession(
         stt=inference.STT(model="deepgram/nova-3-general"),
         llm=inference.LLM(model="openai/gpt-4.1-mini"),  # never actually called - see class docstring
         tts=inference.TTS(model="cartesia/sonic-3", voice="3b554273-4299-48b9-9aaf-eefd438e3941"),
         vad=ctx.proc.userdata["vad"],
         turn_detection=inference.TurnDetector(),
+        min_endpointing_delay=1.0,  # was defaulting to ~0.3-0.5s - too tight for slower/thoughtful speech
+        max_endpointing_delay=6.0,  # upper bound so a long pause still eventually commits the turn
     )
 
     agent = InspectorAssistant(session_token)
     await session.start(agent=agent, room=ctx.room)
-    await ctx.connect()
 
 
 if __name__ == "__main__":

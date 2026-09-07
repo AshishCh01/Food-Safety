@@ -19,4 +19,5 @@ pypdf==6.16.2
 pymupdf==1.25.3
 pytest==8.3.4
 pytest-cov==6.0.0
+livekit-agents[silero,turn-detector]==1.8.0
 livekit-api==1.2.1
