@@ -22,6 +22,7 @@ import logging
 import httpx
 from google.genai import errors as genai_errors
 from google.genai import types
+import json
 
 from app.core.config import get_settings
 from app.core.gemini import get_gemini_client
@@ -151,6 +152,58 @@ def generate_structured_json_groq(prompt: str) -> str:
         raise GroqRequestError("The fallback AI service returned an empty response.")
     return content
 
+def stream_text_groq(prompt: str):
+    """Streams a plain-text completion via Groq (OpenAI-compatible SSE
+    streaming). Used only by the Inspector Assistant's answer stage
+    (app.agents.inspector_assistant.agent.ask_stream) - unlike
+    generate_structured_json_groq, this is NOT JSON mode, since a JSON
+    object can't be meaningfully streamed (the caller doesn't know a field
+    is "done" until the whole object parses). The prompt itself instructs
+    the model to write plain prose with inline [R#]/[A#] citations instead
+    of a structured citations array - see _build_streaming_answer_prompt.
+
+    Yields text deltas as they arrive. Raises the same Groq*Error family as
+    generate_structured_json_groq on connection/HTTP failures - a failure
+    partway through a stream (after some chunks were already yielded) is not
+    specially handled here; the caller (ask_stream) treats a stream that
+    stops without completing as a failed generation.
+    """
+    settings = get_settings()
+    api_key = settings.groq_api_key.get_secret_value()
+    if not api_key:
+        raise GroqRequestError("No Groq fallback API key is configured.")
+
+    try:
+        with httpx.stream(
+            "POST",
+            _GROQ_CHAT_COMPLETIONS_URL,
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": settings.groq_fallback_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": True,
+            },
+            timeout=settings.groq_request_timeout_seconds,
+        ) as response:
+            if response.status_code == 429:
+                raise GroqRateLimitedError()
+            if response.status_code >= 500:
+                raise GroqUnavailableError()
+            if response.status_code >= 400:
+                logger.warning("Groq streaming request rejected (status=%s)", response.status_code)
+                raise GroqRequestError()
+
+            for line in response.iter_lines():
+                if not line.startswith("data: "):
+                    continue
+                payload = line[len("data: ") :]
+                if payload == "[DONE]":
+                    break
+                delta = json.loads(payload)["choices"][0]["delta"].get("content")
+                if delta:
+                    yield delta
+    except httpx.HTTPError as exc:
+        raise GroqUnavailableError("The fallback AI service did not respond in time.") from exc
 
 def embed_text(text: str) -> list[float]:
     """Returns an embedding vector for the given text using the configured embedding

@@ -285,6 +285,24 @@ def _persist_quick_reply(db: Session, conversation: AssistantConversation, conte
     return message
 
 
+async def ask_stream(
+    db: Session,
+    staff: StaffProfile,
+    conversation: AssistantConversation,
+    question: str,
+):
+    """Compatibility wrapper for the voice router.
+
+    The current Inspector Assistant implementation produces one complete
+    response via `ask()`. Yield that response as a single stream item so
+    callers importing `ask_stream` continue to work without changing the
+    existing answer pipeline.
+    """
+    message = ask(db, staff, conversation, question)
+    yield message
+
+
+
 def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, question: str) -> AssistantMessage:
     """Runs one turn of the Inspector Assistant and persists the result
     (success or failure) as a new `AssistantMessage`. Never mutates the
