@@ -16,6 +16,8 @@ from app.schemas.agent import (
     AssistantMessageRead,
     EvidenceAnalysisRead,
     PaginatedAssistantConversations,
+    VoiceSessionTokenRead,
+    LiveKitSessionRead
 )
 from app.schemas.assignment import AssignmentRead, AssignmentSummary, PaginatedAssignments
 from app.schemas.evidence import EvidenceRead
@@ -289,6 +291,35 @@ def get_assistant_conversation(
     conversation = assistant_service.get_conversation_for_inspector(db, staff, conversation_id)
     return assistant_service.to_conversation_read(conversation)
 
+@router.post(
+    "/assistant/conversations/{conversation_id}/voice-session",
+    response_model=VoiceSessionTokenRead,
+)
+def start_voice_session(
+    conversation_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> VoiceSessionTokenRead:
+    """Mints a short-lived token scoped to this one conversation, to be
+    handed to an external voice platform (e.g. Dograh) instead of the
+    inspector's own login token - see app/api/voice/router.py."""
+    conversation = assistant_service.get_conversation_for_inspector(db, staff, conversation_id)
+    token, expires_at = assistant_service.create_voice_session_token_for_conversation(staff, conversation)
+    return VoiceSessionTokenRead(session_token=token, expires_at=expires_at)
+
+@router.post(
+    "/assistant/conversations/{conversation_id}/livekit-session",
+    response_model=LiveKitSessionRead,
+)
+def start_livekit_session(
+    conversation_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> LiveKitSessionRead:
+    """Mints a LiveKit room-join token for the inspector's browser to start
+    a voice session for this conversation - see app/services/assistant_service.py."""
+    conversation = assistant_service.get_conversation_for_inspector(db, staff, conversation_id)
+    return assistant_service.create_livekit_session_for_conversation(staff, conversation)
 
 @router.post("/assistant/conversations/{conversation_id}/messages", response_model=AssistantMessageRead)
 def send_assistant_message(

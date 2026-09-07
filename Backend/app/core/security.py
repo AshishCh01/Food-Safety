@@ -13,6 +13,7 @@ from app.utils.exceptions import InvalidTokenError
 
 class TokenType(str, Enum):
     ACCESS = "access"
+    VOICE_SESSION = "voice_session"
 
 
 def hash_password(password: str) -> str:
@@ -71,6 +72,21 @@ def create_access_token(
         },
     )
 
+def create_voice_session_token(conversation_id: uuid.UUID, staff_id: uuid.UUID, expires_delta: timedelta) -> str:
+    """Short-lived, single-conversation-scoped token handed to an external
+    voice platform (e.g. Dograh) instead of the inspector's own login
+    access token. `sub` is the conversation, not the user - the voice-turn
+    endpoint (app/api/voice/router.py) never trusts a conversation_id or
+    staff_id supplied in the request body, only what's signed into this
+    token. `staff_id` is embedded so ownership can still be re-verified
+    when the token is resolved (app.services.assistant_service.resolve_voice_session)."""
+    settings = get_settings()
+    return _create_token(
+        conversation_id,
+        TokenType.VOICE_SESSION,
+        expires_delta,
+        extra_claims={"staff_id": str(staff_id)},
+    )
 
 def decode_token(token: str, expected_type: TokenType) -> dict:
     settings = get_settings()

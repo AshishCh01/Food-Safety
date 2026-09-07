@@ -175,3 +175,37 @@ class PaginatedAssistantConversations(BaseModel):
     total: int
     page: int
     page_size: int
+
+class VoiceSessionTokenRead(BaseModel):
+    """Handed to the voice platform (e.g. Dograh) to authenticate subsequent
+    turns for this one conversation - never the inspector's own access or
+    refresh token."""
+
+    session_token: str
+    expires_at: datetime
+
+
+class VoiceTurnRequest(BaseModel):
+    """`session_token` is the sole source of authorization here - there is
+    no inspector login token on this request."""
+
+    transcript: str = Field(min_length=1, max_length=2000)
+    session_token: str
+
+
+class VoiceTurnResponse(BaseModel):
+    answer: str
+    is_uncertain: bool
+    uncertainty_reason: str | None
+
+class LiveKitSessionRead(BaseModel):
+    """Everything the frontend needs to join the LiveKit room for this
+    conversation. The internal voice_session_token (see
+    VoiceSessionTokenRead) is NOT included here - it travels only inside the
+    signed agent-dispatch metadata the LiveKit worker receives, never to the
+    browser."""
+
+    livekit_url: str
+    room_name: str
+    access_token: str
+    expires_at: datetime

@@ -39,6 +39,15 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
+
+    voice_session_token_expire_minutes: int = 15
+
+    livekit_url: str = "wss://food-safety-mrqdp4r3.livekit.cloud"  # wss://<your-project>.livekit.cloud
+    livekit_api_key: SecretStr = SecretStr("")
+    livekit_api_secret: SecretStr = SecretStr("")
+    livekit_room_token_expire_minutes: int = 15
+    livekit_agent_name: str = "inspector-voice-assistant"
+
     # Tolerance window for concurrent refresh requests that both presented
     # the same (still-valid-at-request-time) refresh token - see
     # app/services/auth_service.py's reuse-detection logic. A losing
@@ -65,7 +74,7 @@ class Settings(BaseSettings):
     gemini_reasoning_model: str = "gemini-3.6-flash"
     gemini_embedding_model: str = "gemini-embedding-2-preview"
     gemini_embedding_dimensions: int = 768
-    gemini_request_timeout_seconds: float = 60.0
+    gemini_request_timeout_seconds: float = 15.0
 
     # Fallback provider for the text agents (complaint triage, investigation,
     # inspector assistant) when Gemini is rate-limited or unavailable - see

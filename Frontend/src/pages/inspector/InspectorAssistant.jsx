@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import AssistantChat from '../../components/agent/AssistantChat';
+import VoiceSessionPanel from '../../components/agent/VoiceSessionPanel';
 import ContentContainer from '../../components/layout/ContentContainer';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/ui/Card';
@@ -55,6 +56,7 @@ function InspectorAssistant() {
         description="Ask about food-safety regulations, inspection guidelines, or procedures. Answers are advisory only and always show their sources - they never replace your own judgement or a formal finding."
       />
       <Card>
+        {conversation && <VoiceSessionPanel conversationId={conversation.id} token={getAccessToken()} />}
         <AssistantChat
           messages={conversation ? conversation.messages : []}
           onSend={handleSend}

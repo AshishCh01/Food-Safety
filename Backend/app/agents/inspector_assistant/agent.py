@@ -24,13 +24,30 @@ Two-stage design, deliberately never letting the model choose entity IDs:
    `used_source_ids`, since (unlike RAG excerpts) they are server-fetched and
    never at risk of being fabricated by the model.
 
+Both stages are now Groq-primary, Gemini-fallback (see _call_intent_llm and
+_call_answer_llm) - diagnostic logging on 2026-09-06 showed Gemini's key
+consistently rate-limited across an extended testing session, while Groq's
+openai/gpt-oss-20b answered correctly and in 2-4s essentially every time it
+wasn't itself concurrently rate-limited. Groq's JSON mode isn't
+schema-constrained the way Gemini's structured output is (see
+generate_structured_json_groq's docstring) - _AnswerPayload validation below
+is what catches a malformed response from either provider; an invalid
+citation ID is still silently dropped by the rag_block_map lookup further
+down, same as before this swap.
+
 Never modifies any complaint/inspection/business record; only ever appends
 `AssistantMessage` rows. See docs/AI_AGENTS_ARCHITECTURE.md section 12
 (human-in-the-loop rules): this agent answers questions and organizes
 information, never issues findings or regulatory decisions.
+
+TEMP: stage-level timing logs (INTENT / RAG retrieval / ANSWER) were added
+while diagnosing the Gemini quota issue that motivated the Groq-primary
+swaps above - keep until both providers' quota tiers are confirmed stable,
+then remove.
 """
 
 import json
+import logging
 import time
 
 from pydantic import BaseModel, Field, ValidationError
@@ -46,6 +63,8 @@ from app.repositories import assistant_repository
 from app.utils.enums import AssistantMessageRole
 from app.utils.exceptions import AppError, GeminiRateLimitedError, GeminiUnavailableError, InvalidAiResponseError
 from app.services import ai_service
+
+logger = logging.getLogger("inspector_assistant")
 
 _MAX_ATTEMPTS = 2
 _RETRY_BACKOFF_SECONDS = 1.0
@@ -226,6 +245,32 @@ def _call_gemini_with_retry(prompt: str, response_schema: dict) -> str:
     raise AssertionError("unreachable")  # pragma: no cover
 
 
+def _call_intent_llm(prompt: str) -> tuple[str, str]:
+    """Groq-primary, Gemini-fallback - see module docstring. Returns
+    (raw_json, model_used)."""
+    settings = get_settings()
+    if settings.groq_api_key.get_secret_value():
+        try:
+            return ai_service.generate_structured_json_groq(prompt), settings.groq_fallback_model
+        except AppError:
+            pass  # fall through to Gemini below
+    return _call_gemini_with_retry(prompt, _intent_schema()), settings.gemini_main_model
+
+
+def _call_answer_llm(prompt: str) -> tuple[str, str]:
+    """Groq-primary, Gemini-fallback - see module docstring. Returns
+    (raw_json, model_used). Any exception raised here means both providers
+    failed (or Gemini alone, if no Groq key is configured); the caller
+    handles it exactly as it did the old Gemini-only path."""
+    settings = get_settings()
+    if settings.groq_api_key.get_secret_value():
+        try:
+            return ai_service.generate_structured_json_groq(prompt), settings.groq_fallback_model
+        except AppError:
+            pass  # fall through to Gemini below
+    return _call_gemini_with_retry(prompt, _answer_schema()), settings.gemini_main_model
+
+
 def _persist_failure(
     db: Session, conversation: AssistantConversation, model_used: str, error_code: str, error_message: str
 ) -> AssistantMessage:
@@ -267,18 +312,16 @@ def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, q
     has_case_context = inspection is not None
 
     intent_prompt = _build_intent_prompt(question, history_text, has_case_context)
+    _t0 = time.perf_counter()
     try:
-        intent_raw = _call_gemini_with_retry(intent_prompt, _intent_schema())
+        intent_raw, model_used = _call_intent_llm(intent_prompt)
     except (GeminiRateLimitedError, GeminiUnavailableError) as exc:
-        if not settings.groq_api_key.get_secret_value():
-            return _persist_failure(db, conversation, model_used, exc.code, exc.message)
-        try:
-            intent_raw = ai_service.generate_structured_json_groq(intent_prompt)
-            model_used = settings.groq_fallback_model
-        except AppError as fallback_exc:
-            return _persist_failure(db, conversation, model_used, fallback_exc.code, fallback_exc.message)
-    except AppError as exc:
+        logger.info("INTENT stage failed after %.2fs (model=%s): %s", time.perf_counter() - _t0, model_used, exc.code)
         return _persist_failure(db, conversation, model_used, exc.code, exc.message)
+    except AppError as exc:
+        logger.info("INTENT stage failed after %.2fs (model=%s): %s", time.perf_counter() - _t0, model_used, exc.code)
+        return _persist_failure(db, conversation, model_used, exc.code, exc.message)
+    logger.info("INTENT stage took %.2fs (model=%s)", time.perf_counter() - _t0, model_used)
 
     try:
         intent = _IntentPayload.model_validate_json(intent_raw)
@@ -291,6 +334,7 @@ def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, q
     rag_blocks: list[tuple[str, RetrievedChunk]] = []
     regulatory_search_attempted = intent.needs_regulatory_search or intent.needs_inspection_guideline_search
     if regulatory_search_attempted:
+        _t0 = time.perf_counter()
         search_query = intent.search_query.strip() or question
         business_type = business.business_type if business is not None else None
         try:
@@ -300,8 +344,10 @@ def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, q
             if intent.needs_inspection_guideline_search:
                 chunks += tools.search_inspection_guidelines(db, search_query, business_type=business_type)
         except AppError as exc:
+            logger.info("RAG retrieval failed after %.2fs: %s", time.perf_counter() - _t0, exc.code)
             return _persist_failure(db, conversation, model_used, exc.code, exc.message)
         rag_blocks = [(f"R{i + 1}", chunk) for i, chunk in enumerate(chunks)]
+        logger.info("RAG retrieval took %.2fs (%d chunks)", time.perf_counter() - _t0, len(rag_blocks))
 
     app_blocks: list[tuple[str, str, dict]] = []
     if has_case_context:
@@ -331,18 +377,16 @@ def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, q
             app_index += 1
 
     answer_prompt = _build_answer_prompt(question, history_text, rag_blocks, app_blocks, regulatory_search_attempted)
+    _t0 = time.perf_counter()
     try:
-        answer_raw = _call_gemini_with_retry(answer_prompt, _answer_schema())
+        answer_raw, model_used = _call_answer_llm(answer_prompt)
     except (GeminiRateLimitedError, GeminiUnavailableError) as exc:
-        if not settings.groq_api_key.get_secret_value():
-            return _persist_failure(db, conversation, model_used, exc.code, exc.message)
-        try:
-            answer_raw = ai_service.generate_structured_json_groq(answer_prompt)
-            model_used = settings.groq_fallback_model
-        except AppError as fallback_exc:
-            return _persist_failure(db, conversation, model_used, fallback_exc.code, fallback_exc.message)
-    except AppError as exc:
+        logger.info("ANSWER stage failed after %.2fs (model=%s): %s", time.perf_counter() - _t0, model_used, exc.code)
         return _persist_failure(db, conversation, model_used, exc.code, exc.message)
+    except AppError as exc:
+        logger.info("ANSWER stage failed after %.2fs (model=%s): %s", time.perf_counter() - _t0, model_used, exc.code)
+        return _persist_failure(db, conversation, model_used, exc.code, exc.message)
+    logger.info("ANSWER stage took %.2fs (model=%s)", time.perf_counter() - _t0, model_used)
 
     try:
         answer = _AnswerPayload.model_validate_json(answer_raw)

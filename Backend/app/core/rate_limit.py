@@ -65,6 +65,12 @@ inspector_evidence_upload_rate_limiter = InMemoryRateLimiter(max_requests=20, wi
 # Admin-only and comparatively rare (knowledge-base document management),
 # so a tighter quota than the evidence limiters is appropriate.
 rag_document_upload_rate_limiter = InMemoryRateLimiter(max_requests=10, window_seconds=60)
+# The voice-turn endpoint (app/api/voice/router.py) is deliberately reachable
+# without an inspector login token - authorization comes from the
+# voice-session token in the payload instead. That makes it the one
+# inspector-facing endpoint with no natural per-user key, so it's rate-limited
+# by IP like the public auth endpoints above.
+voice_turn_rate_limiter = InMemoryRateLimiter(max_requests=30, window_seconds=60)
 
 ALL_RATE_LIMITERS = (
     login_rate_limiter,
@@ -74,6 +80,7 @@ ALL_RATE_LIMITERS = (
     citizen_evidence_upload_rate_limiter,
     inspector_evidence_upload_rate_limiter,
     rag_document_upload_rate_limiter,
+    voice_turn_rate_limiter,
 )
 
 
