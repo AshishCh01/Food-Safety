@@ -37,6 +37,8 @@ const AuditLogs = lazy(() => import('../pages/admin/AuditLogs'));
 const StaffManagement = lazy(() => import('../pages/admin/StaffManagement'));
 const Businesses = lazy(() => import('../pages/admin/Businesses'));
 const RagDocuments = lazy(() => import('../pages/admin/RagDocuments'));
+const AdminComplaints = lazy(() => import('../pages/admin/AdminComplaints'));
+const AdminComplaintDetails = lazy(() => import('../pages/admin/AdminComplaintDetails'));
 
 const Notifications = lazy(() => import('../pages/shared/Notifications'));
 
@@ -88,7 +90,10 @@ function AppRoutes() {
               <Route path="/admin/businesses" element={<Businesses />} />
               <Route path="/admin/rag-documents" element={<RagDocuments />} />
               <Route path="/admin/audit-logs" element={<AuditLogs />} />
+              <Route path="/admin/complaints" element={<AdminComplaints />} />
+              <Route path="/admin/complaints/:complaintId" element={<AdminComplaintDetails />} />
             </Route>
+
           </Route>
         </Route>
       </Routes>

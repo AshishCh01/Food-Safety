@@ -22,10 +22,13 @@ from app.schemas.district import DistrictRead
 from app.schemas.rag import PaginatedRagDocuments, RagDocumentCreate, RagDocumentRead
 from app.schemas.staff import StaffCreateRequest, StaffRead
 from app.schemas.user import PaginatedUsers, UserStatusUpdate, UserSummary
+from app.schemas.complaint import PaginatedComplaints, ComplaintRead
+from app.utils.enums import ComplaintPriority, ComplaintStatus
 from app.services import (
     analytics_service,
     audit_log_service,
     auth_service,
+    complaint_service,
     district_service,
     rag_document_service,
     staff_service,
@@ -52,6 +55,44 @@ def dashboard(db: Session = Depends(get_db)) -> dict:
         "inspector_count": inspector_total,
         "admin_count": admin_total,
     }
+
+
+@router.get("/complaints", response_model=PaginatedComplaints)
+def list_complaints(
+    district_id: uuid.UUID | None = Query(default=None),
+    status_filter: ComplaintStatus | None = Query(default=None, alias="status"),
+    priority: ComplaintPriority | None = Query(default=None),
+    category_id: uuid.UUID | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> PaginatedComplaints:
+    items, total = complaint_service.list_all(
+        db,
+        district_id=district_id,
+        status=status_filter,
+        priority=priority,
+        category_id=category_id,
+        page=page,
+        page_size=page_size,
+    )
+    return PaginatedComplaints(
+        items=[complaint_service.to_complaint_summary(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/complaints/{complaint_id}", response_model=ComplaintRead)
+def get_complaint(
+    complaint_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> ComplaintRead:
+    complaint = complaint_service.get_complaint(db, complaint_id)
+    return complaint_service.to_complaint_read(complaint)
+
+
 
 
 @router.get("/districts", response_model=list[DistrictRead])

@@ -107,3 +107,24 @@ export function getComplaintInspection(complaintId, token) {
 export function listInspectors(token) {
   return apiRequest('/officer/inspectors', { token });
 }
+
+export function listAdminComplaints(
+  token,
+  { districtId, status, priority, categoryId, page = 1, pageSize = 20 } = {}
+) {
+  return apiRequest(
+    withQuery('/admin/complaints', {
+      district_id: districtId,
+      status,
+      priority,
+      category_id: categoryId,
+      page,
+      page_size: pageSize,
+    }),
+    { token }
+  );
+}
+
+export function getAdminComplaint(complaintId, token) {
+  return apiRequest(`/admin/complaints/${complaintId}`, { token });
+}

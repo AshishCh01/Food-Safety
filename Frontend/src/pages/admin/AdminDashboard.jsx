@@ -15,6 +15,7 @@ import { apiRequest } from '../../services/api';
 import { getAdminAnalytics } from '../../services/analyticsService';
 
 const QUICK_LINKS = [
+  { label: 'Complaints', path: '/admin/complaints', icon: ClipboardList },
   { label: 'Staff', path: '/admin/staff', icon: Users },
   { label: 'Businesses', path: '/admin/businesses', icon: Building2 },
   { label: 'Knowledge Base', path: '/admin/rag-documents', icon: FileText },

@@ -207,6 +207,13 @@ def get_complaint_for_citizen(db: Session, citizen_id: uuid.UUID, complaint_id: 
     return complaint
 
 
+def get_complaint(db: Session, complaint_id: uuid.UUID) -> Complaint:
+    complaint = complaint_repository.get_by_id(db, complaint_id)
+    if complaint is None:
+        raise ComplaintNotFoundError()
+    return complaint
+
+
 def get_complaint_for_officer(db: Session, staff: StaffProfile, complaint_id: uuid.UUID) -> Complaint:
     complaint = complaint_repository.get_by_id(db, complaint_id)
     if complaint is None or complaint.district_id != staff.district_id:
@@ -240,6 +247,21 @@ def list_for_district(
 ) -> tuple[list[Complaint], int]:
     return complaint_repository.list_by_district(
         db, district_id, status=status, priority=priority, category_id=category_id, page=page, page_size=page_size
+    )
+
+
+def list_all(
+    db: Session,
+    *,
+    district_id: uuid.UUID | None = None,
+    status: ComplaintStatus | None,
+    priority: ComplaintPriority | None,
+    category_id: uuid.UUID | None,
+    page: int,
+    page_size: int,
+) -> tuple[list[Complaint], int]:
+    return complaint_repository.list_all(
+        db, district_id=district_id, status=status, priority=priority, category_id=category_id, page=page, page_size=page_size
     )
 
 

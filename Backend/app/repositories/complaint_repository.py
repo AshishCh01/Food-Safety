@@ -208,3 +208,35 @@ def list_by_district(
     )
     items = list(db.execute(stmt).scalars().all())
     return items, total
+
+
+def list_all(
+    db: Session,
+    *,
+    district_id: uuid.UUID | None = None,
+    status: ComplaintStatus | None = None,
+    priority: ComplaintPriority | None = None,
+    category_id: uuid.UUID | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[Complaint], int]:
+    stmt = select(Complaint)
+    if district_id is not None:
+        stmt = stmt.where(Complaint.district_id == district_id)
+    if status is not None:
+        stmt = stmt.where(Complaint.status == status)
+    if priority is not None:
+        stmt = stmt.where(Complaint.priority == priority)
+    if category_id is not None:
+        stmt = stmt.where(Complaint.category_id == category_id)
+
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+
+    stmt = (
+        stmt.options(*_EAGER_OPTIONS)
+        .order_by(Complaint.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    items = list(db.execute(stmt).scalars().all())
+    return items, total
