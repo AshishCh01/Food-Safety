@@ -133,13 +133,35 @@ class InspectorAssistant(Agent):
                     # actually shortens the "let me check" window now.
                     if self._filler_task and not self._filler_task.done():
                         self._filler_task.cancel()
+
+                    char_count = 0
+                    # ~800 chars ≈ 30-40 seconds of TTS audio, safe well under the
+                    # Cartesia timeout. The backend prompt asks for 3-6 sentences but
+                    # the model sometimes produces longer answers; this is a hard cap.
+                    MAX_CHARS = 800
+
                     async for line in response.aiter_lines():
                         if not line.startswith("data: "):
                             continue
-                        payload = line[len("data: ") :]
+                        payload = line[len("data: "):]
                         if payload == "[DONE]":
                             break
+                        # Skip the final metadata JSON blob - it starts with '{'
+                        # and contains "type": "done". We only want plain text tokens.
+                        if payload.startswith("{"):
+                            try:
+                                parsed = json.loads(payload)
+                                if isinstance(parsed, dict) and parsed.get("type") == "done":
+                                    break
+                            except (json.JSONDecodeError, ValueError):
+                                pass  # Not JSON - treat as normal text token
+                        # Hard cap: stop feeding TTS once we've sent enough text,
+                        # preventing multi-minute answers that time out Cartesia.
+                        if char_count >= MAX_CHARS:
+                            continue
+                        char_count += len(payload)
                         yield payload
+
             except httpx.HTTPError:
                 logger.exception("voice-turn request failed")
                 if self._filler_task and not self._filler_task.done():
@@ -150,6 +172,7 @@ class InspectorAssistant(Agent):
         return process_stream()
 
 
+
 @server.rtc_session(agent_name=AGENT_NAME)
 async def entrypoint(ctx: JobContext) -> None:
     metadata = json.loads(ctx.job.metadata or "{}")
@@ -158,10 +181,7 @@ async def entrypoint(ctx: JobContext) -> None:
         logger.error("Voice job dispatched with no voice_session_token in metadata - refusing to start")
         return
 
-    # Join the room FIRST. AgentSession(room=ctx.room) needs the room to
-    # already be connected - starting the session before connecting was
-    # the source of the earlier intermittent "sometimes it just doesn't
-    # respond" behavior.
+    # Join the room FIRST before starting the session.
     await ctx.connect()
 
     session = AgentSession(
@@ -170,12 +190,13 @@ async def entrypoint(ctx: JobContext) -> None:
         tts=inference.TTS(model="cartesia/sonic-3", voice="3b554273-4299-48b9-9aaf-eefd438e3941"),
         vad=ctx.proc.userdata["vad"],
         turn_detection=inference.TurnDetector(),
-        min_endpointing_delay=1.0,  # was defaulting to ~0.3-0.5s - too tight for slower/thoughtful speech
-        max_endpointing_delay=6.0,  # upper bound so a long pause still eventually commits the turn
+        min_endpointing_delay=1.0,
+        max_endpointing_delay=6.0,
     )
 
     agent = InspectorAssistant(session_token)
     await session.start(agent=agent, room=ctx.room)
+
 
 
 if __name__ == "__main__":
