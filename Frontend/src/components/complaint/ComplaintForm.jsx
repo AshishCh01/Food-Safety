@@ -53,7 +53,7 @@ function ComplaintForm({ categories, districts, onSubmit, isSubmitting, error, t
     onSubmit({
       category_id: form.categoryId,
       district_id: form.districtId,
-      title: form.title,
+      title: `Complaint regarding ${form.businessName}`,
       description: form.description,
       priority: form.priority,
       address_line: form.addressLine || null,
@@ -62,7 +62,7 @@ function ComplaintForm({ categories, districts, onSubmit, isSubmitting, error, t
       business: {
         business_name: form.businessName,
         business_type: form.businessType || null,
-        address: form.businessAddress,
+        address: form.addressLine || 'Not provided',
         contact_phone: form.businessPhone || null,
         license_number: form.businessLicense || null,
       },
@@ -94,10 +94,6 @@ function ComplaintForm({ categories, districts, onSubmit, isSubmitting, error, t
           </Select>
         </FormField>
 
-        <FormField label="Title" htmlFor="complaint-title" required className="sm:col-span-2">
-          <Input id="complaint-title" value={form.title} onChange={updateField('title')} minLength={3} required />
-        </FormField>
-
         <FormField label="Description" htmlFor="complaint-description" required className="sm:col-span-2">
           <Textarea
             id="complaint-description"
@@ -107,16 +103,6 @@ function ComplaintForm({ categories, districts, onSubmit, isSubmitting, error, t
             rows={5}
             required
           />
-        </FormField>
-
-        <FormField label="Priority" htmlFor="complaint-priority">
-          <Select id="complaint-priority" value={form.priority} onChange={updateField('priority')}>
-            {PRIORITIES.map((priority) => (
-              <option key={priority.value} value={priority.value}>
-                {priority.label}
-              </option>
-            ))}
-          </Select>
         </FormField>
 
         <FormField label="Location description" htmlFor="complaint-address">
@@ -151,17 +137,6 @@ function ComplaintForm({ categories, districts, onSubmit, isSubmitting, error, t
           </FormField>
           <FormField label="License number" htmlFor="business-license" hint="Optional">
             <Input id="business-license" value={form.businessLicense} onChange={updateField('businessLicense')} />
-          </FormField>
-          <FormField label="Business address" htmlFor="business-address" required className="sm:col-span-2">
-            <Input
-              id="business-address"
-              value={form.businessAddress}
-              onChange={updateField('businessAddress')}
-              required
-            />
-          </FormField>
-          <FormField label="Business phone" htmlFor="business-phone" hint="Optional">
-            <Input id="business-phone" value={form.businessPhone} onChange={updateField('businessPhone')} />
           </FormField>
         </div>
       </Card>
