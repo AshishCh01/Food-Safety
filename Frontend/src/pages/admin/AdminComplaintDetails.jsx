@@ -56,25 +56,36 @@ function AdminComplaintDetails() {
         <Card.Header>
           <Card.Title>Complaint details</Card.Title>
         </Card.Header>
-        <Card.Body>
-          <DetailGrid>
-            <DetailGrid.Item label="Title">{complaint.title}</DetailGrid.Item>
-            <DetailGrid.Item label="Category">{complaint.category_name}</DetailGrid.Item>
-            <DetailGrid.Item label="Priority">
-              <Badge tone={priority.tone}>{priority.label}</Badge>
-            </DetailGrid.Item>
-            <DetailGrid.Item label="Date submitted">{formatDateTime(complaint.created_at)}</DetailGrid.Item>
-            <DetailGrid.Item label="Business">{complaint.business_name}</DetailGrid.Item>
-            <DetailGrid.Item label="Location">
-              {complaint.business_address}
-              <br />
-              {complaint.district_name} District
-            </DetailGrid.Item>
-            <DetailGrid.Item label="Description" fullWidth>
-              <p className="whitespace-pre-wrap">{complaint.description}</p>
-            </DetailGrid.Item>
-          </DetailGrid>
-        </Card.Body>
+        <DetailGrid>
+          <dt>Title</dt>
+          <dd>{complaint.title}</dd>
+          
+          <dt>Category</dt>
+          <dd>{complaint.category_name}</dd>
+          
+          <dt>Priority</dt>
+          <dd>
+            <Badge tone={priority.tone}>{priority.label}</Badge>
+          </dd>
+          
+          <dt>Date submitted</dt>
+          <dd>{formatDateTime(complaint.created_at)}</dd>
+          
+          <dt>Business</dt>
+          <dd>{complaint.business_name}</dd>
+          
+          <dt>Location</dt>
+          <dd>
+            {complaint.business_address}
+            <br />
+            {complaint.district_name} District
+          </dd>
+          
+          <dt className="sm:col-span-2">Description</dt>
+          <dd className="sm:col-span-2">
+            <p className="whitespace-pre-wrap">{complaint.description}</p>
+          </dd>
+        </DetailGrid>
       </Card>
     </ContentContainer>
   );
