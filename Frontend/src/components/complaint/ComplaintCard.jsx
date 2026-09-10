@@ -17,12 +17,16 @@ function ComplaintCard({ complaint, linkTo }) {
       </div>
       <h3 className="mt-1.5 font-medium text-slate-900">{complaint.title}</h3>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-        <span>{complaint.category_name}</span>
+        <span className="truncate max-w-[200px]" title={complaint.category_name + (complaint.subcategory_name ? ` > ${complaint.subcategory_name}` : '') + (complaint.food_type ? ` > ${complaint.food_type}` : '')}>
+          {complaint.category_name}
+          {complaint.subcategory_name && ` > ${complaint.subcategory_name}`}
+          {complaint.food_type && ` > ${complaint.food_type}`}
+        </span>
         <span aria-hidden="true">&middot;</span>
         <span>{complaint.district_name}</span>
         <Badge tone={priority.tone}>{priority.label}</Badge>
       </div>
-      <time className="mt-2 block text-xs text-slate-400">{formatDate(complaint.created_at)}</time>
+      <time className="mt-2 block text-xs text-slate-400">{formatDate(complaint.reported_at)}</time>
     </Link>
   );
 }

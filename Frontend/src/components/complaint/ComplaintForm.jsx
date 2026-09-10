@@ -12,6 +12,8 @@ import Textarea from '../ui/Textarea';
 
 const INITIAL_FORM = {
   categoryId: '',
+  subCategoryId: '',
+  foodType: '',
   districtId: '',
   title: '',
   description: '',
@@ -29,8 +31,21 @@ const INITIAL_FORM = {
 function ComplaintForm({ categories, districts, onSubmit, isSubmitting, error, token }) {
   const [form, setForm] = useState(INITIAL_FORM);
 
+  const selectedCategory = categories.find((c) => c.id === form.categoryId);
+  const isOthers = selectedCategory?.key === 'others';
+  const subcategories = selectedCategory?.subcategories || [];
+
   function updateField(field) {
     return (event) => setForm((prev) => ({ ...prev, [field]: event.target.value }));
+  }
+
+  function handleCategoryChange(event) {
+    setForm((prev) => ({
+      ...prev,
+      categoryId: event.target.value,
+      subCategoryId: '',
+      foodType: '',
+    }));
   }
 
   function handleLocationChange(latitude, longitude) {
@@ -52,6 +67,8 @@ function ComplaintForm({ categories, districts, onSubmit, isSubmitting, error, t
     event.preventDefault();
     onSubmit({
       category_id: form.categoryId,
+      subcategory_id: isOthers ? null : form.subCategoryId,
+      food_type: isOthers ? form.foodType : null,
       district_id: form.districtId,
       title: `Complaint regarding ${form.businessName}`,
       description: form.description,
@@ -73,7 +90,7 @@ function ComplaintForm({ categories, districts, onSubmit, isSubmitting, error, t
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <Card className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="Category" htmlFor="complaint-category" required>
-          <Select id="complaint-category" value={form.categoryId} onChange={updateField('categoryId')} required>
+          <Select id="complaint-category" value={form.categoryId} onChange={handleCategoryChange} required>
             <option value="">Select a category</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
@@ -82,6 +99,29 @@ function ComplaintForm({ categories, districts, onSubmit, isSubmitting, error, t
             ))}
           </Select>
         </FormField>
+
+        {isOthers ? (
+          <FormField label="Enter Food Type" htmlFor="complaint-food-type" required>
+            <Input id="complaint-food-type" value={form.foodType} onChange={updateField('foodType')} required />
+          </FormField>
+        ) : (
+          <FormField label="Sub Category" htmlFor="complaint-subcategory" required>
+            <Select
+              id="complaint-subcategory"
+              value={form.subCategoryId}
+              onChange={updateField('subCategoryId')}
+              required
+              disabled={!form.categoryId}
+            >
+              <option value="">Select a sub category</option>
+              {subcategories.map((sub) => (
+                <option key={sub.id} value={sub.id}>
+                  {sub.name}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+        )}
 
         <FormField label="District" htmlFor="complaint-district" required>
           <Select id="complaint-district" value={form.districtId} onChange={updateField('districtId')} required>
@@ -132,8 +172,18 @@ function ComplaintForm({ categories, districts, onSubmit, isSubmitting, error, t
           <FormField label="Business name" htmlFor="business-name" required className="sm:col-span-2">
             <Input id="business-name" value={form.businessName} onChange={updateField('businessName')} required />
           </FormField>
-          <FormField label="Business type" htmlFor="business-type" hint="Optional">
-            <Input id="business-type" value={form.businessType} onChange={updateField('businessType')} />
+          <FormField label="Concern" htmlFor="concern" required>
+            <Select id="concern" value={form.businessType} onChange={updateField('businessType')} required>
+              <option value="">Select Concern</option>
+              <option value="Rotten food">Rotten food</option>
+              <option value="Foreign material present">Foreign material present</option>
+              <option value="Non-veg food delivered instead of veg food">Non-veg food delivered instead of veg food</option>
+              <option value="Expired product delivered">Expired product delivered</option>
+              <option value="Issue with labelling of food products">Issue with labelling of food products</option>
+              <option value="Damaged/puffed pack">Damaged/puffed pack</option>
+              <option value="Delivery issues">Delivery issues</option>
+              <option value="Others">Others</option>
+            </Select>
           </FormField>
           <FormField label="License number" htmlFor="business-license" hint="Optional">
             <Input id="business-license" value={form.businessLicense} onChange={updateField('businessLicense')} />

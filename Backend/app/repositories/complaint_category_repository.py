@@ -14,9 +14,16 @@ def get_by_key(db: Session, key: str) -> ComplaintCategory | None:
     return db.execute(select(ComplaintCategory).where(ComplaintCategory.key == key)).scalar_one_or_none()
 
 
+from sqlalchemy.orm import joinedload
+
 def list_active(db: Session) -> list[ComplaintCategory]:
-    stmt = select(ComplaintCategory).where(ComplaintCategory.is_active.is_(True)).order_by(ComplaintCategory.name)
-    return list(db.execute(stmt).scalars().all())
+    stmt = (
+        select(ComplaintCategory)
+        .options(joinedload(ComplaintCategory.subcategories))
+        .where(ComplaintCategory.is_active.is_(True))
+        .order_by(ComplaintCategory.name)
+    )
+    return list(db.execute(stmt).scalars().unique().all())
 
 
 def create(db: Session, *, key: str, name: str, description: str | None = None) -> ComplaintCategory:

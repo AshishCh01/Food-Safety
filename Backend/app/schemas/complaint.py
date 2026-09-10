@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.business import BusinessInput, BusinessRead
 from app.utils.enums import ComplaintPriority, ComplaintStatus
@@ -9,6 +9,8 @@ from app.utils.enums import ComplaintPriority, ComplaintStatus
 
 class ComplaintCreateRequest(BaseModel):
     category_id: uuid.UUID
+    subcategory_id: uuid.UUID | None = None
+    food_type: str | None = Field(default=None, max_length=200)
     district_id: uuid.UUID
     title: str = Field(min_length=3, max_length=200)
     description: str = Field(min_length=10, max_length=5000)
@@ -18,6 +20,10 @@ class ComplaintCreateRequest(BaseModel):
     address_line: str | None = Field(default=None, max_length=500)
     reported_at: datetime | None = None
     business: BusinessInput
+
+    @model_validator(mode='after')
+    def validate_category_requirements(self) -> 'ComplaintCreateRequest':
+        return self
 
 
 class ComplaintRead(BaseModel):
@@ -29,6 +35,9 @@ class ComplaintRead(BaseModel):
     priority: ComplaintPriority
     category_id: uuid.UUID
     category_name: str
+    subcategory_id: uuid.UUID | None = None
+    subcategory_name: str | None = None
+    food_type: str | None = None
     district_id: uuid.UUID
     district_name: str
     business: BusinessRead | None
@@ -49,6 +58,8 @@ class ComplaintSummary(BaseModel):
     complaint_number: str
     title: str
     category_name: str
+    subcategory_name: str | None = None
+    food_type: str | None = None
     status: ComplaintStatus
     priority: ComplaintPriority
     district_name: str

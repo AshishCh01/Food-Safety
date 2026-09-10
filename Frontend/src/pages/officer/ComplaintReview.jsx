@@ -195,7 +195,11 @@ function ComplaintReview() {
       <Card>
         <DetailGrid>
           <dt>Category</dt>
-          <dd>{complaint.category_name}</dd>
+          <dd>
+            {complaint.category_name}
+            {complaint.subcategory_name && ` > ${complaint.subcategory_name}`}
+            {complaint.food_type && ` > ${complaint.food_type}`}
+          </dd>
           <dt>Priority</dt>
           <dd>
             <Badge tone={priority.tone}>{priority.label}</Badge>
@@ -208,6 +212,12 @@ function ComplaintReview() {
             <>
               <dt>Location</dt>
               <dd>{complaint.address_line}</dd>
+            </>
+          )}
+          {complaint.business?.business_type && (
+            <>
+              <dt>Concern</dt>
+              <dd>{complaint.business.business_type}</dd>
             </>
           )}
         </DetailGrid>

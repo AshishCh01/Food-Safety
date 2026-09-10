@@ -5,6 +5,7 @@ from app.models.audit_log import AuditLog
 from app.models.business import Business
 from app.models.complaint import Complaint
 from app.models.complaint_category import ComplaintCategory
+from app.models.complaint_subcategory import ComplaintSubcategory
 from app.models.complaint_sequence import ComplaintSequence
 from app.models.complaint_status_history import ComplaintStatusHistory
 from app.models.complaint_triage import ComplaintTriage
@@ -28,6 +29,7 @@ __all__ = [
     "District",
     "StaffProfile",
     "ComplaintCategory",
+    "ComplaintSubcategory",
     "Business",
     "ComplaintSequence",
     "Complaint",

@@ -100,6 +100,63 @@ def get_assignment(
     return assignment_service.to_assignment_read(assignment, inspection_read=inspection_read)
 
 
+from app.schemas.agent import ComplaintTriageRead, InvestigationBriefRead
+from app.schemas.evidence import EvidenceWithAnalysisRead
+from app.agents.complaint_triage import agent as complaint_triage_agent
+from app.agents.evidence_analysis import agent as evidence_analysis_agent
+from app.agents.investigation import agent as investigation_agent
+from app.services import evidence_service
+from app.utils.exceptions import NotFoundError
+
+@router.get("/assignments/{assignment_id}/triage", response_model=ComplaintTriageRead)
+def get_assignment_triage(
+    assignment_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> ComplaintTriageRead:
+    assignment = assignment_service.get_assignment_for_inspector(db, staff.id, assignment_id)
+    triage = complaint_triage_agent.get_latest_triage(db, assignment.complaint_id)
+    if triage is None:
+        raise NotFoundError("Triage not found for this complaint.")
+    return complaint_triage_agent.to_triage_read(triage)
+
+
+@router.get("/assignments/{assignment_id}/investigation-brief", response_model=InvestigationBriefRead)
+def get_assignment_investigation_brief(
+    assignment_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> InvestigationBriefRead:
+    assignment = assignment_service.get_assignment_for_inspector(db, staff.id, assignment_id)
+    brief = investigation_agent.get_latest_investigation(db, assignment.complaint_id)
+    if brief is None:
+        raise NotFoundError("Investigation brief not found for this complaint.")
+    return investigation_agent.to_investigation_read(brief)
+
+
+@router.get("/assignments/{assignment_id}/complaint-evidence", response_model=list[EvidenceWithAnalysisRead])
+def get_assignment_complaint_evidence(
+    assignment_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+) -> list[EvidenceWithAnalysisRead]:
+    assignment = assignment_service.get_assignment_for_inspector(db, staff.id, assignment_id)
+    evidence_reads = evidence_service.list_evidence_with_urls(db, assignment.complaint_id)
+    
+    results = []
+    for item_read in evidence_reads:
+        analysis = evidence_analysis_agent.get_latest_analysis(db, item_read.id)
+        results.append(
+            EvidenceWithAnalysisRead(
+                **item_read.model_dump(),
+                analysis=evidence_analysis_agent.to_analysis_read(analysis) if analysis else None
+            )
+        )
+    return results
+
+
+
+
 @router.post("/inspections", response_model=InspectionRead, status_code=status.HTTP_201_CREATED)
 def create_inspection(
     payload: InspectionCreateRequest,

@@ -32,6 +32,10 @@ class Complaint(Base):
     category_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("complaint_categories.id", ondelete="RESTRICT"), nullable=False, index=True
     )
+    subcategory_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("complaint_subcategories.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    food_type: Mapped[str | None] = mapped_column(String(200), nullable=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[ComplaintStatus] = mapped_column(
@@ -65,6 +69,7 @@ class Complaint(Base):
     business: Mapped["Business | None"] = relationship()
     district: Mapped["District"] = relationship()
     category: Mapped["ComplaintCategory"] = relationship()
+    subcategory: Mapped["ComplaintSubcategory | None"] = relationship()
     status_history: Mapped[list["ComplaintStatusHistory"]] = relationship(
         back_populates="complaint", cascade="all, delete-orphan", order_by="ComplaintStatusHistory.created_at"
     )

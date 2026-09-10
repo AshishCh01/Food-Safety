@@ -8,7 +8,7 @@ import Alert from '../ui/Alert';
 // Everything here is clearly framed as AI-generated and advisory - it never
 // represents a confirmed finding, and running it never changes the evidence
 // file or complaint/inspection.
-function EvidenceAnalysisPanel({ evidenceItem, analysis, isRunning, error, onRun }) {
+function EvidenceAnalysisPanel({ evidenceItem, analysis, isRunning, error, onRun, readOnly = false }) {
   return (
     <AiResultPanel
       as="div"
@@ -24,6 +24,7 @@ function EvidenceAnalysisPanel({ evidenceItem, analysis, isRunning, error, onRun
       runLabel="Analyze with AI"
       rerunLabel="Re-analyze"
       runningLabel="Analyzing…"
+      readOnly={readOnly}
     >
       {analysis?.is_uncertain && (
         <UncertainBanner>

@@ -83,3 +83,15 @@ export function completeInspection(inspectionId, { summary, actionRecommended },
 export function listInspectionHistory(token, { page = 1, pageSize = 20 } = {}) {
   return apiRequest(withQuery('/inspector/history', { page, page_size: pageSize }), { token });
 }
+
+export function getAssignmentTriage(assignmentId, token) {
+  return apiRequest(`/inspector/assignments/${assignmentId}/triage`, { token });
+}
+
+export function getAssignmentInvestigationBrief(assignmentId, token) {
+  return apiRequest(`/inspector/assignments/${assignmentId}/investigation-brief`, { token });
+}
+
+export function getAssignmentComplaintEvidence(assignmentId, token) {
+  return apiRequest(`/inspector/assignments/${assignmentId}/complaint-evidence`, { token });
+}

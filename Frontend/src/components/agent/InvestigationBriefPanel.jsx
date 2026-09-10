@@ -11,7 +11,7 @@ import AiResultPanel, { AiMeta, AiSection, UncertainBanner } from './AiResultPan
 // risk indicators, regulatory guidance, suggested actions). Running it never
 // changes the complaint, its status, or any official finding - the final
 // decision always remains with the officer.
-function InvestigationBriefPanel({ brief, isRunning, error, onRun }) {
+function InvestigationBriefPanel({ brief, isRunning, error, onRun, readOnly = false }) {
   return (
     <AiResultPanel
       title="AI Investigation Brief (Advisory)"
@@ -25,6 +25,7 @@ function InvestigationBriefPanel({ brief, isRunning, error, onRun }) {
       runLabel="Run investigation"
       rerunLabel="Re-run investigation"
       runningLabel="Running investigation…"
+      readOnly={readOnly}
     >
       {brief?.is_uncertain && (
         <UncertainBanner>

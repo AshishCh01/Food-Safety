@@ -12,6 +12,7 @@ _EAGER_OPTIONS = (
     joinedload(Complaint.business),
     joinedload(Complaint.district),
     joinedload(Complaint.category),
+    joinedload(Complaint.subcategory),
     joinedload(Complaint.submitted_by),
 )
 

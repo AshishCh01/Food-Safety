@@ -8,11 +8,12 @@ import AiResultPanel, { AiMeta, AiSection, UncertainBanner } from './AiResultPan
 // officer (re-)run it on demand. Everything here is clearly framed as
 // AI-generated and advisory - it never represents an official officer
 // decision, and running it never changes the complaint itself.
-function ComplaintTriagePanel({ triage, isRunning, error, onRun }) {
+function ComplaintTriagePanel({ triage, isRunning, error, onRun, readOnly = false }) {
   const priorityTone = triage ? configFor(PRIORITIES, triage.suggested_priority).tone : 'neutral';
 
   return (
     <AiResultPanel
+      readOnly={readOnly}
       title="AI Triage (Advisory)"
       hasResult={Boolean(triage)}
       isRunning={isRunning}

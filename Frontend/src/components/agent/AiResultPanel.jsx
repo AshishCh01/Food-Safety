@@ -20,15 +20,19 @@ function AiResultPanel({
   runLabel,
   rerunLabel,
   runningLabel,
+  readOnly = false,
   children,
 }) {
   return (
     <Tag className="rounded-lg border border-brand-200 bg-brand-50/40 p-4 sm:p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <Heading className="text-base font-semibold text-slate-900">{title}</Heading>
-        <Button type="button" size="sm" variant="secondary" onClick={onRun} disabled={isRunning} loading={isRunning}>
-          {isRunning ? runningLabel : hasResult ? rerunLabel : runLabel}
-        </Button>
+        { !readOnly && (
+          <Button type="button" size="sm" variant="secondary" onClick={onRun} disabled={isRunning} loading={isRunning}>
+            {isRunning ? runningLabel : hasResult ? rerunLabel : runLabel}
+          </Button>
+        )}
+
       </div>
 
       {error && (

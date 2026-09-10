@@ -61,7 +61,11 @@ function AdminComplaintDetails() {
           <dd>{complaint.title}</dd>
           
           <dt>Category</dt>
-          <dd>{complaint.category_name}</dd>
+          <dd>
+            {complaint.category_name}
+            {complaint.subcategory_name && ` > ${complaint.subcategory_name}`}
+            {complaint.food_type && ` > ${complaint.food_type}`}
+          </dd>
           
           <dt>Priority</dt>
           <dd>
@@ -72,14 +76,21 @@ function AdminComplaintDetails() {
           <dd>{formatDateTime(complaint.created_at)}</dd>
           
           <dt>Business</dt>
-          <dd>{complaint.business_name}</dd>
+          <dd>{complaint.business?.business_name || 'N/A'}</dd>
           
           <dt>Location</dt>
           <dd>
-            {complaint.business_address}
+            {complaint.address_line || complaint.business?.address || 'N/A'}
             <br />
             {complaint.district_name} District
           </dd>
+          
+          {complaint.business?.business_type && (
+            <>
+              <dt>Concern</dt>
+              <dd>{complaint.business.business_type}</dd>
+            </>
+          )}
           
           <dt className="sm:col-span-2">Description</dt>
           <dd className="sm:col-span-2">

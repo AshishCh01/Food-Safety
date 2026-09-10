@@ -90,13 +90,23 @@ function ComplaintDetails() {
       <Card>
         <DetailGrid>
           <dt>Category</dt>
-          <dd>{complaint.category_name}</dd>
+          <dd>
+            {complaint.category_name}
+            {complaint.subcategory_name && ` > ${complaint.subcategory_name}`}
+            {complaint.food_type && ` > ${complaint.food_type}`}
+          </dd>
           <dt>Priority</dt>
           <dd>
             <Badge tone={priority.tone}>{priority.label}</Badge>
           </dd>
           <dt>District</dt>
           <dd>{complaint.district_name}</dd>
+          {complaint.business?.business_type && (
+            <>
+              <dt>Concern</dt>
+              <dd>{complaint.business.business_type}</dd>
+            </>
+          )}
           <dt>Reported at</dt>
           <dd>{formatDateTime(complaint.reported_at)}</dd>
           {complaint.address_line && (

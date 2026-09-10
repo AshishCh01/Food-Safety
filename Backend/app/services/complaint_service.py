@@ -140,6 +140,24 @@ def create_complaint(db: Session, citizen: User, payload: ComplaintCreateRequest
     if category is None or not category.is_active:
         raise CategoryNotFoundError()
 
+    if category.key == "others":
+        if payload.subcategory_id is not None:
+            raise ValueError("subcategory_id must not be set when category is 'Others'")
+        if not payload.food_type:
+            raise ValueError("food_type is required when category is 'Others'")
+    else:
+        if payload.food_type is not None:
+            raise ValueError("food_type must not be set unless category is 'Others'")
+        if payload.subcategory_id is None:
+            raise ValueError("subcategory_id is required")
+        from sqlalchemy import select
+        from app.models.complaint_subcategory import ComplaintSubcategory
+        subcat = db.execute(
+            select(ComplaintSubcategory).where(ComplaintSubcategory.id == payload.subcategory_id)
+        ).scalar_one_or_none()
+        if not subcat or subcat.category_id != category.id:
+            raise ValueError("Invalid subcategory_id for the selected category")
+
     district = _resolve_district(db, payload)
 
     business = business_service.get_or_create_business(
@@ -157,6 +175,8 @@ def create_complaint(db: Session, citizen: User, payload: ComplaintCreateRequest
         business_id=business.id,
         district_id=district.id,
         category_id=category.id,
+        subcategory_id=payload.subcategory_id,
+        food_type=payload.food_type,
         title=payload.title,
         description=payload.description,
         status=ComplaintStatus.SUBMITTED,
@@ -417,6 +437,9 @@ def to_complaint_read(complaint: Complaint) -> ComplaintRead:
         priority=complaint.priority,
         category_id=complaint.category_id,
         category_name=complaint.category.name,
+        subcategory_id=complaint.subcategory_id,
+        subcategory_name=complaint.subcategory.name if complaint.subcategory else None,
+        food_type=complaint.food_type,
         district_id=complaint.district_id,
         district_name=complaint.district.name,
         business=business_read,
@@ -439,6 +462,8 @@ def to_complaint_summary(complaint: Complaint) -> ComplaintSummary:
         complaint_number=complaint.complaint_number,
         title=complaint.title,
         category_name=complaint.category.name,
+        subcategory_name=complaint.subcategory.name if complaint.subcategory else None,
+        food_type=complaint.food_type,
         status=complaint.status,
         priority=complaint.priority,
         district_name=complaint.district.name,

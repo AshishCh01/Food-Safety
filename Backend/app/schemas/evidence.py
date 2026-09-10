@@ -17,3 +17,9 @@ class EvidenceRead(BaseModel):
     uploaded_by_user_id: uuid.UUID
     created_at: datetime
     download_url: str | None = None
+
+
+from app.schemas.agent import EvidenceAnalysisRead
+
+class EvidenceWithAnalysisRead(EvidenceRead):
+    analysis: EvidenceAnalysisRead | None = None

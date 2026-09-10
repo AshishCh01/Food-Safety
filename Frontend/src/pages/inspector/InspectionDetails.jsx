@@ -16,6 +16,8 @@ import DetailGrid from '../../components/ui/DetailGrid';
 import ErrorState from '../../components/ui/ErrorState';
 import Skeleton from '../../components/ui/Skeleton';
 import { useAuth } from '../../hooks/useAuth';
+import ComplaintTriagePanel from '../../components/agent/ComplaintTriagePanel';
+import InvestigationBriefPanel from '../../components/agent/InvestigationBriefPanel';
 import {
   createAssistantConversation,
   getAssistantConversation,
@@ -29,6 +31,9 @@ import {
   completeInspection,
   createInspection,
   getAssignment,
+  getAssignmentTriage,
+  getAssignmentInvestigationBrief,
+  getAssignmentComplaintEvidence,
   listInspectionEvidence,
   startInspection,
   uploadInspectionEvidence,
@@ -39,41 +44,63 @@ function InspectionDetails() {
   const { assignmentId } = useParams();
   const { getAccessToken } = useAuth();
   const [assignment, setAssignment] = useState(null);
-  const [evidence, setEvidence] = useState([]);
-  const [error, setError] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [evidenceAnalyses, setEvidenceAnalyses] = useState({});
-  const [analyzingEvidenceId, setAnalyzingEvidenceId] = useState(null);
-  const [evidenceAnalysisErrors, setEvidenceAnalysisErrors] = useState({});
+const [evidence, setEvidence] = useState([]);
+const [error, setError] = useState(null);
+const [isSubmitting, setIsSubmitting] = useState(false);
+const [evidenceAnalyses, setEvidenceAnalyses] = useState({});
+const [analyzingEvidenceId, setAnalyzingEvidenceId] = useState(null);
+const [evidenceAnalysisErrors, setEvidenceAnalysisErrors] = useState({});
+
+// AI case brief state
+const [aiTriage, setAiTriage] = useState(null);
+const [aiInvestigationBrief, setAiInvestigationBrief] = useState(null);
+const [aiComplaintEvidence, setAiComplaintEvidence] = useState([]);
+const [showAiBrief, setShowAiBrief] = useState(true);
   const [assistantConversation, setAssistantConversation] = useState(null);
   const [isAssistantLoading, setIsAssistantLoading] = useState(false);
   const [isAssistantSending, setIsAssistantSending] = useState(false);
   const [assistantError, setAssistantError] = useState(null);
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     const token = getAccessToken();
     let inspectionId = null;
-    getAssignment(assignmentId, token)
-      .then((data) => {
-        setAssignment(data);
-        inspectionId = data.inspection ? data.inspection.id : null;
-        return inspectionId ? listInspectionEvidence(inspectionId, token) : Promise.resolve([]);
-      })
-      .then((evidenceData) => {
-        setEvidence(evidenceData);
-        if (!inspectionId || evidenceData.length === 0) {
-          return [];
-        }
-        return Promise.all(
+    try {
+      const assignmentData = await getAssignment(assignmentId, token);
+      setAssignment(assignmentData);
+      inspectionId = assignmentData.inspection ? assignmentData.inspection.id : null;
+
+      // Fetch AI data concurrently
+      const [triageData, briefData, complaintEvidenceData] = await Promise.all([
+        getAssignmentTriage(assignmentId, token).catch(() => null),
+        getAssignmentInvestigationBrief(assignmentId, token).catch(() => null),
+        getAssignmentComplaintEvidence(assignmentId, token).catch(() => []),
+      ]);
+      setAiTriage(triageData);
+      setAiInvestigationBrief(briefData);
+      setAiComplaintEvidence(complaintEvidenceData);
+
+      // Fetch inspection evidence if inspection exists
+      let evidenceData = [];
+      if (inspectionId) {
+        evidenceData = await listInspectionEvidence(inspectionId, token);
+      }
+      setEvidence(evidenceData);
+
+      if (inspectionId && evidenceData.length > 0) {
+        const entries = await Promise.all(
           evidenceData.map((item) =>
             getInspectionEvidenceAnalysis(inspectionId, item.id, token)
               .then((result) => [item.id, result])
-              .catch(() => [item.id, null]),
-          ),
+              .catch(() => [item.id, null])
+          )
         );
-      })
-      .then((entries) => setEvidenceAnalyses(Object.fromEntries(entries)))
-      .catch((err) => setError(err.message));
+        setEvidenceAnalyses(Object.fromEntries(entries));
+      } else {
+        setEvidenceAnalyses({});
+      }
+    } catch (err) {
+      setError(err.message);
+    }
   }, [assignmentId, getAccessToken]);
 
   useEffect(() => {
@@ -255,7 +282,28 @@ function InspectionDetails() {
         )}
       </Card>
 
-      {error && <Alert tone="danger">{error}</Alert>}
+      {assignment && (
+  <Card padded={false}>
+    <Card.Header className="px-4 pt-4 sm:px-5 sm:pt-5">
+      <Card.Title>
+        <button type="button" className="text-left w-full flex items-center justify-between" onClick={() => setShowAiBrief(v => !v)}>
+          AI Case Brief
+          <span>{showAiBrief ? '▲' : '▼'}</span>
+        </button>
+      </Card.Title>
+    </Card.Header>
+    {showAiBrief && (
+      <div className="flex flex-col gap-4 px-4 pb-4 sm:px-5 sm:pb-5">
+        <ComplaintTriagePanel triage={aiTriage} readOnly />
+        <InvestigationBriefPanel brief={aiInvestigationBrief} readOnly />
+        {Array.isArray(aiComplaintEvidence) && aiComplaintEvidence.map((ev) => (
+          <EvidenceAnalysisPanel key={ev.id} evidenceItem={ev} analysis={ev.analysis ?? ev} readOnly />
+        ))}
+      </div>
+    )}
+  </Card>
+)}
+{error && <Alert tone="danger">{error}</Alert>}
 
       {!inspection && (
         <Card>
