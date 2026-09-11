@@ -12,7 +12,7 @@ function withQuery(path, params = {}) {
 }
 
 export function listFoodAnalysts(token) {
-  return apiRequest('/officer/food-analysts', { token });
+  return apiRequest('/food-analysts', { token });
 }
 
 export function listAnalystSamples(token, { status, page = 1, pageSize = 20 } = {}) {

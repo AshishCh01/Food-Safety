@@ -103,6 +103,8 @@ function ComplaintDetails() {
   }
 
   const priority = configFor(PRIORITIES, complaint.priority);
+  const latestClarification = [...timeline].reverse().find(t => t.new_status === 'insufficient_evidence');
+  const officerInstruction = latestClarification?.reason;
 
   return (
     <ContentContainer className="max-w-3xl">
@@ -192,6 +194,12 @@ function ComplaintDetails() {
             <p className="text-sm text-brand-800 mb-4">
               The reviewing officer has requested additional information or clarification regarding your complaint. Please provide the details below.
             </p>
+            {officerInstruction && (
+              <div className="mb-4 p-3 bg-white bg-opacity-50 rounded border border-brand-200">
+                <p className="text-sm font-medium text-brand-900 mb-1">Officer's Instruction:</p>
+                <p className="text-sm text-brand-800">{officerInstruction}</p>
+              </div>
+            )}
             <form onSubmit={handleClarifySubmit} className="space-y-4">
               <FormField label="Your Response">
                 <Textarea 

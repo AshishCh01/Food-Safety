@@ -358,11 +358,6 @@ def get_complaint_investigation(
         raise InvestigationNotFoundError()
     return investigation_agent.to_investigation_read(brief)
 
-@router.get("/food-analysts", response_model=list[StaffRead])
-def list_food_analysts(db: Session = Depends(get_db)):
-    """Global list of all active food analysts, as they are not district-scoped."""
-    analysts = staff_repository.list_by_role(db, UserRole.FOOD_ANALYST)
-    return [staff_service.to_staff_read(p) for p in analysts]
 
 
 @router.get("/complaints/{complaint_id}/samples", response_model=list[SampleRead])

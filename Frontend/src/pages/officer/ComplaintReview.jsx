@@ -188,6 +188,11 @@ function ComplaintReview() {
   const availableTransitions = ALLOWED_TRANSITIONS[complaint.status] || [];
   const priority = configFor(PRIORITIES, complaint.priority);
 
+  const latestCitizenResponse = [...timeline]
+    .reverse()
+    .find((t) => t.new_status === 'under_review' && t.reason?.startsWith('Citizen provided requested information: '));
+  const citizenMessage = latestCitizenResponse ? latestCitizenResponse.reason.replace('Citizen provided requested information: ', '') : null;
+
   return (
     <ContentContainer className="max-w-4xl">
       <PageHeader
@@ -233,6 +238,17 @@ function ComplaintReview() {
         </Card.Header>
         <p className="text-sm text-slate-700">{complaint.description}</p>
       </Card>
+
+      {citizenMessage && (
+        <Card className="border-brand-500 bg-brand-50">
+          <Card.Header>
+            <Card.Title className="text-brand-900">Citizen Response</Card.Title>
+          </Card.Header>
+          <div className="p-4 sm:p-5">
+            <p className="text-sm text-brand-800">{citizenMessage}</p>
+          </div>
+        </Card>
+      )}
 
       {complaint.business && (
         <Card>

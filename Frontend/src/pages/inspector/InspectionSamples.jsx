@@ -68,7 +68,7 @@ function InspectionSamples({ inspectionId, readOnly = false }) {
     setIsSubmitting(true);
     try {
       const payload = {
-        analyst_staff_id: dispatchForm.analyst_id || null,
+        food_analyst_id: dispatchForm.analyst_id || null,
         lab_name: dispatchForm.lab_name || null,
       };
       await dispatchSample(dispatchSampleId, payload, getAccessToken());
@@ -193,7 +193,7 @@ function InspectionSamples({ inspectionId, readOnly = false }) {
               <option value="">Select an analyst...</option>
               {analysts.map((a) => (
                 <option key={a.id} value={a.id}>
-                  {a.first_name} {a.last_name} ({a.employee_id})
+                  {a.full_name} ({a.employee_code})
                 </option>
               ))}
             </Select>

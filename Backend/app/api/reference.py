@@ -6,7 +6,10 @@ from app.core.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.complaint_category import ComplaintCategoryRead
 from app.schemas.district import DistrictRead
-from app.services import complaint_category_service, district_service, geocoding_service
+from app.schemas.staff import StaffRead
+from app.services import complaint_category_service, district_service, geocoding_service, staff_service
+from app.repositories import staff_repository
+from app.utils.enums import UserRole
 from app.utils.geo import validate_coordinates
 
 router = APIRouter(tags=["reference"], dependencies=[Depends(get_current_user)])
@@ -40,3 +43,10 @@ def reverse_geocode(
     validate_coordinates(lat, lon)
     address = geocoding_service.reverse_geocode(lat, lon)
     return {"address": address}
+
+
+@router.get("/food-analysts", response_model=list[StaffRead])
+def list_food_analysts(db: Session = Depends(get_db)):
+    """Global list of all active food analysts, as they are not district-scoped."""
+    analysts = staff_repository.list_by_role(db, UserRole.FOOD_ANALYST)
+    return [staff_service.to_staff_read(p) for p in analysts]
