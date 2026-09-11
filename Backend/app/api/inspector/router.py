@@ -32,7 +32,14 @@ from app.schemas.inspection import (
     InspectionUpdateRequest,
     PaginatedInspections,
 )
-from app.services import assignment_service, assistant_service, evidence_service, inspection_service
+from app.schemas.sample import SampleCreateRequest, SampleDispatchRequest, SampleRead
+from app.services import (
+    assignment_service,
+    assistant_service,
+    evidence_service,
+    inspection_service,
+    sample_service,
+)
 from app.utils.enums import AssignmentStatus, InspectionStatus
 from app.utils.exceptions import EvidenceAnalysisNotFoundError
 from app.utils.uploads import read_upload_bounded
@@ -416,3 +423,37 @@ def send_assistant_message_stream(
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
+
+@router.post("/inspections/{inspection_id}/samples", response_model=SampleRead, status_code=status.HTTP_201_CREATED)
+def collect_sample(
+    inspection_id: uuid.UUID,
+    payload: SampleCreateRequest,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+):
+    inspection = inspection_service.get_inspection_for_inspector(db, staff.id, inspection_id)
+    sample = sample_service.collect_sample(db, staff, inspection, payload)
+    return sample_service.to_sample_read(sample)
+
+
+@router.get("/inspections/{inspection_id}/samples", response_model=list[SampleRead])
+def list_samples(
+    inspection_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+):
+    inspection = inspection_service.get_inspection_for_inspector(db, staff.id, inspection_id)
+    samples = sample_service.list_for_inspection(db, inspection.id)
+    return [sample_service.to_sample_read(s) for s in samples]
+
+
+@router.post("/samples/{sample_id}/dispatch", response_model=SampleRead)
+def dispatch_sample(
+    sample_id: uuid.UUID,
+    payload: SampleDispatchRequest,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+):
+    sample = sample_service.get_sample_for_inspector(db, staff.id, sample_id)
+    dispatched = sample_service.dispatch_sample(db, staff, sample, payload)
+    return sample_service.to_sample_read(dispatched)

@@ -11,6 +11,7 @@ from app.repositories import (
     audit_log_repository,
     inspection_finding_repository,
     inspection_repository,
+    sample_repository,
 )
 from app.schemas.inspection import (
     InspectionCompleteRequest,
@@ -178,12 +179,20 @@ def complete_inspection(
         details={"action_recommended": payload.action_recommended},
     )
 
+    samples_count = sample_repository.count_by_inspection(db, inspection.id)
+    if samples_count > 0:
+        new_status = ComplaintStatus.SAMPLE_PENDING_LAB_RESULT
+        reason = f"Inspection completed with {samples_count} sample(s) collected for lab testing."
+    else:
+        new_status = ComplaintStatus.INSPECTION_COMPLETED
+        reason = "Inspection completed."
+
     complaint_service.apply_system_transition(
         db,
         inspection.complaint,
-        ComplaintStatus.INSPECTION_COMPLETED,
+        new_status,
         inspector.user_id,
-        reason="Inspection completed.",
+        reason=reason,
     )
 
     return inspection_repository.get_by_id(db, inspection.id)

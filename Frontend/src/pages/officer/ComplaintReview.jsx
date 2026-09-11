@@ -40,6 +40,8 @@ import {
   listDistrictComplaintEvidence,
   updateComplaintStatus,
 } from '../../services/complaintService';
+import InspectionSamples from '../inspector/InspectionSamples';
+import ComplaintLegalActions from './ComplaintLegalActions';
 
 // Mirrors app.services.complaint_service.ALLOWED_TRANSITIONS on the backend
 // (the source of truth) - kept here only to drive the dropdown; the server
@@ -48,10 +50,12 @@ import {
 // listed here since they only happen through their own dedicated actions.
 const ALLOWED_TRANSITIONS = {
   submitted: ['under_review', 'verified', 'rejected', 'duplicate', 'insufficient_evidence'],
-  under_review: ['needs_information', 'verified', 'rejected', 'duplicate', 'insufficient_evidence'],
-  needs_information: ['under_review', 'rejected'],
+  under_review: ['insufficient_evidence', 'verified', 'rejected', 'duplicate'],
+  insufficient_evidence: ['under_review', 'rejected'],
   inspection_completed: ['action_in_progress', 'resolved', 'closed'],
+  sample_pending_lab_result: ['action_in_progress', 'legal_action_in_progress'],
   action_in_progress: ['resolved', 'closed'],
+  legal_action_in_progress: ['resolved', 'closed'],
   resolved: ['closed'],
 };
 
@@ -336,6 +340,14 @@ function ComplaintReview() {
         </Card>
       )}
 
+      {inspection && ['sample_pending_lab_result', 'legal_action_in_progress', 'action_in_progress', 'resolved', 'closed'].includes(complaint.status) && (
+        <InspectionSamples inspectionId={inspection.id} readOnly />
+      )}
+
+      {['legal_action_in_progress', 'resolved', 'closed'].includes(complaint.status) && (
+        <ComplaintLegalActions complaintId={complaintId} />
+      )}
+
       <InvestigationBriefPanel
         brief={investigation}
         isRunning={isInvestigationRunning}
@@ -361,12 +373,12 @@ function ComplaintReview() {
                 ))}
               </Select>
             </FormField>
-            <FormField label="Reason" htmlFor="status-reason" hint="Optional">
-              <Textarea id="status-reason" value={reason} onChange={(event) => setReason(event.target.value)} rows={3} />
+            <FormField label="Reason" htmlFor="status-reason" hint={nextStatus === 'insufficient_evidence' ? 'Required' : 'Optional'}>
+              <Textarea id="status-reason" value={reason} onChange={(event) => setReason(event.target.value)} rows={3} required={nextStatus === 'insufficient_evidence'} />
             </FormField>
             {error && <Alert tone="danger">{error}</Alert>}
             <Button type="submit" disabled={!nextStatus} loading={isSubmitting} className="self-start">
-              {isSubmitting ? 'Updating…' : 'Update status'}
+              {isSubmitting ? 'Updatingâ€¦' : 'Update status'}
             </Button>
           </form>
         )}

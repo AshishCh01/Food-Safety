@@ -21,7 +21,7 @@ export function createStaff(payload, token) {
       full_name: payload.fullName,
       phone: payload.phone || null,
       role: payload.role,
-      district_id: payload.districtId,
+      district_id: payload.districtId || null,
       employee_code: payload.employeeCode,
       designation: payload.designation || null,
     },

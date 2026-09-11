@@ -39,6 +39,7 @@ import {
   uploadInspectionEvidence,
 } from '../../services/inspectionService';
 import InspectionForm from './InspectionForm';
+import InspectionSamples from './InspectionSamples';
 
 function InspectionDetails() {
   const { assignmentId } = useParams();
@@ -346,6 +347,8 @@ const [showAiBrief, setShowAiBrief] = useState(true);
                 </Card.Header>
                 <EvidenceUploader evidence={evidence} onUpload={handleUploadEvidence} renderExtra={renderEvidenceAnalysis} />
               </Card>
+
+              <InspectionSamples inspectionId={inspection.id} />
             </>
           )}
 
@@ -372,6 +375,9 @@ const [showAiBrief, setShowAiBrief] = useState(true);
                 </Card.Header>
                 <EvidenceUploader evidence={evidence} readOnly renderExtra={renderEvidenceAnalysis} />
               </Card>
+              
+              <InspectionSamples inspectionId={inspection.id} readOnly />
+
               <Card>
                 <Card.Header>
                   <Card.Title>Outcome</Card.Title>

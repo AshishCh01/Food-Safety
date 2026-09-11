@@ -11,9 +11,13 @@ from app.utils.exceptions import ConflictError, NotFoundError, UserAlreadyExists
 
 
 def create_staff(db: Session, payload: StaffCreateRequest, *, actor_user_id: uuid.UUID | None = None) -> StaffProfile:
-    district = district_repository.get_by_id(db, payload.district_id)
-    if district is None:
-        raise NotFoundError("District was not found.")
+    # District is required for inspectors/officers, optional for food analysts.
+    if payload.district_id is not None:
+        district = district_repository.get_by_id(db, payload.district_id)
+        if district is None:
+            raise NotFoundError("District was not found.")
+    else:
+        district = None
 
     if user_repository.get_by_email(db, payload.email):
         raise UserAlreadyExistsError()
@@ -56,7 +60,7 @@ def create_staff(db: Session, payload: StaffCreateRequest, *, actor_user_id: uui
             entity_id=profile.id,
             details={
                 "role": payload.role.value,
-                "district_id": str(payload.district_id),
+                "district_id": str(payload.district_id) if payload.district_id else None,
                 "employee_code": payload.employee_code,
             },
         )
@@ -73,7 +77,7 @@ def to_staff_read(profile: StaffProfile) -> StaffRead:
         phone=profile.user.phone,
         role=profile.role,
         district_id=profile.district_id,
-        district_name=profile.district.name,
+        district_name=profile.district.name if profile.district else None,
         employee_code=profile.employee_code,
         designation=profile.designation,
         is_active=profile.is_active,

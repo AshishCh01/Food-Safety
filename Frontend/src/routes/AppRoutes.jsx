@@ -42,6 +42,9 @@ const AdminComplaintDetails = lazy(() => import('../pages/admin/AdminComplaintDe
 
 const Notifications = lazy(() => import('../pages/shared/Notifications'));
 
+const FoodAnalystDashboard = lazy(() => import('../pages/food-analyst/FoodAnalystDashboard'));
+const SampleReview = lazy(() => import('../pages/food-analyst/SampleReview'));
+
 function RouteFallback() {
   return (
     <div className="flex min-h-64 items-center justify-center">
@@ -92,6 +95,10 @@ function AppRoutes() {
               <Route path="/admin/audit-logs" element={<AuditLogs />} />
               <Route path="/admin/complaints" element={<AdminComplaints />} />
               <Route path="/admin/complaints/:complaintId" element={<AdminComplaintDetails />} />
+            </Route>
+            <Route element={<RoleRoute allowedRoles={[ROLES.FOOD_ANALYST]} />}>
+              <Route path="/food-analyst" element={<FoodAnalystDashboard />} />
+              <Route path="/food-analyst/samples" element={<SampleReview />} />
             </Route>
 
           </Route>

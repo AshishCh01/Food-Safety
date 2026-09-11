@@ -20,7 +20,7 @@ DEFAULT_TREND_DAYS = 30
 
 # Status groupings for KPI buckets, derived from the complaint lifecycle in
 # docs/PROJECT_SPEC.md section 9 / docs/DATABASE_SCHEMA.md section 12.
-PENDING_STATUSES = (ComplaintStatus.SUBMITTED, ComplaintStatus.UNDER_REVIEW, ComplaintStatus.NEEDS_INFORMATION)
+PENDING_STATUSES = (ComplaintStatus.SUBMITTED, ComplaintStatus.UNDER_REVIEW, ComplaintStatus.INSUFFICIENT_EVIDENCE)
 ACTIVE_STATUSES = (
     ComplaintStatus.VERIFIED,
     ComplaintStatus.ASSIGNED,

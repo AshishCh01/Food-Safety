@@ -76,6 +76,12 @@ class Complaint(Base):
     evidence_items: Mapped[list["Evidence"]] = relationship(
         back_populates="complaint", cascade="all, delete-orphan", order_by="Evidence.created_at"
     )
+    legal_actions: Mapped[list["LegalAction"]] = relationship(
+        back_populates="complaint", cascade="all, delete-orphan", order_by="LegalAction.created_at"
+    )
+    clarifications: Mapped[list["ComplaintClarification"]] = relationship(
+        back_populates="complaint", cascade="all, delete-orphan", order_by="ComplaintClarification.created_at"
+    )
 
 
 event.listen(Complaint, "before_insert", sync_location_from_lat_lon)

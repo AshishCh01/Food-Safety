@@ -24,6 +24,7 @@ import { createStaff, listUsers, updateUserStatus } from '../../services/staffSe
 const ROLE_TABS = [
   { value: 'district_officer', label: 'District Officers' },
   { value: 'inspector', label: 'Inspectors' },
+  { value: 'food_analyst', label: 'Food Analysts' },
 ];
 
 const PAGE_SIZE = 20;
@@ -196,18 +197,21 @@ function StaffManagement() {
             <Select id="staff-role" value={form.role} onChange={updateField('role')} required>
               <option value="inspector">Inspector</option>
               <option value="district_officer">District Officer</option>
+              <option value="food_analyst">Food Analyst</option>
             </Select>
           </FormField>
-          <FormField label="District" htmlFor="staff-district" required>
-            <Select id="staff-district" value={form.districtId} onChange={updateField('districtId')} required>
-              <option value="">Select a district</option>
-              {districts.map((district) => (
-                <option key={district.id} value={district.id}>
-                  {district.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
+          {form.role !== 'food_analyst' && (
+            <FormField label="District" htmlFor="staff-district" required>
+              <Select id="staff-district" value={form.districtId} onChange={updateField('districtId')} required>
+                <option value="">Select a district</option>
+                {districts.map((district) => (
+                  <option key={district.id} value={district.id}>
+                    {district.name}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          )}
           <FormField label="Employee code" htmlFor="staff-employee-code" required>
             <Input id="staff-employee-code" value={form.employeeCode} onChange={updateField('employeeCode')} required />
           </FormField>

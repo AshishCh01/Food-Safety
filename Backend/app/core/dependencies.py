@@ -83,8 +83,10 @@ def require_roles(*roles: UserRole):
 require_admin = require_roles(UserRole.ADMIN)
 require_district_officer = require_roles(UserRole.DISTRICT_OFFICER)
 require_inspector = require_roles(UserRole.INSPECTOR)
+require_food_analyst = require_roles(UserRole.FOOD_ANALYST)
 require_citizen = require_roles(UserRole.CITIZEN)
-require_staff = require_roles(UserRole.DISTRICT_OFFICER, UserRole.INSPECTOR)
+require_staff = require_roles(UserRole.DISTRICT_OFFICER, UserRole.INSPECTOR, UserRole.FOOD_ANALYST)
+require_food_analyst_or_officer = require_roles(UserRole.FOOD_ANALYST, UserRole.DISTRICT_OFFICER)
 
 
 def get_current_staff_profile(

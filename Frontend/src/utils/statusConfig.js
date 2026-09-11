@@ -17,7 +17,6 @@ export const PRIORITY_COLORS = {
 export const COMPLAINT_STATUSES = [
   { value: 'submitted', label: 'Submitted', tone: 'info' },
   { value: 'under_review', label: 'Under Review', tone: 'info' },
-  { value: 'needs_information', label: 'Needs Information', tone: 'warning' },
   { value: 'verified', label: 'Verified', tone: 'success' },
   { value: 'rejected', label: 'Rejected', tone: 'danger' },
   { value: 'duplicate', label: 'Duplicate', tone: 'danger' },

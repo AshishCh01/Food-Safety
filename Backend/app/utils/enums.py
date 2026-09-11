@@ -5,16 +5,16 @@ class UserRole(str, enum.Enum):
     CITIZEN = "citizen"
     INSPECTOR = "inspector"
     DISTRICT_OFFICER = "district_officer"
+    FOOD_ANALYST = "food_analyst"
     ADMIN = "admin"
 
 
-STAFF_ROLES = (UserRole.INSPECTOR, UserRole.DISTRICT_OFFICER)
+STAFF_ROLES = (UserRole.INSPECTOR, UserRole.DISTRICT_OFFICER, UserRole.FOOD_ANALYST)
 
 
 class ComplaintStatus(str, enum.Enum):
     SUBMITTED = "submitted"
     UNDER_REVIEW = "under_review"
-    NEEDS_INFORMATION = "needs_information"
     VERIFIED = "verified"
     REJECTED = "rejected"
     DUPLICATE = "duplicate"
@@ -23,7 +23,9 @@ class ComplaintStatus(str, enum.Enum):
     INSPECTION_SCHEDULED = "inspection_scheduled"
     UNDER_INSPECTION = "under_inspection"
     INSPECTION_COMPLETED = "inspection_completed"
+    SAMPLE_PENDING_LAB_RESULT = "sample_pending_lab_result"
     ACTION_IN_PROGRESS = "action_in_progress"
+    LEGAL_ACTION_IN_PROGRESS = "legal_action_in_progress"
     RESOLVED = "resolved"
     CLOSED = "closed"
     CANCELLED = "cancelled"
@@ -123,6 +125,10 @@ class NotificationType(str, enum.Enum):
     INSPECTION_SCHEDULED = "inspection_scheduled"
     INSPECTION_COMPLETED = "inspection_completed"
     COMPLAINT_RESOLVED = "complaint_resolved"
+    CLARIFICATION_REQUESTED = "clarification_requested"
+    CITIZEN_RESPONDED = "citizen_responded"
+    SAMPLE_RESULT_RECEIVED = "sample_result_received"
+    LEGAL_ACTION_INITIATED = "legal_action_initiated"
 
 
 class RefreshSessionRevokedReason(str, enum.Enum):
@@ -135,3 +141,41 @@ class RefreshSessionRevokedReason(str, enum.Enum):
     LOGOUT = "logout"
     ACCOUNT_DEACTIVATED = "account_deactivated"
     REUSE_DETECTED = "reuse_detected"
+
+
+class SampleStatus(str, enum.Enum):
+    COLLECTED = "collected"
+    DISPATCHED = "dispatched"
+    RECEIVED_AT_LAB = "received_at_lab"
+    TESTING_IN_PROGRESS = "testing_in_progress"
+    RESULT_RECEIVED = "result_received"
+
+
+class LabVerdict(str, enum.Enum):
+    SAFE = "safe"
+    ADULTERATED = "adulterated"
+    UNSAFE = "unsafe"
+    MISBRANDED = "misbranded"
+    MISLEADINGLY_ADVERTISED = "misleadingly_advertised"
+
+
+# Verdicts that trigger LEGAL_ACTION_IN_PROGRESS on the complaint.
+LAB_UNSAFE_VERDICTS = (
+    LabVerdict.ADULTERATED,
+    LabVerdict.UNSAFE,
+    LabVerdict.MISBRANDED,
+    LabVerdict.MISLEADINGLY_ADVERTISED,
+)
+
+
+class LegalActionType(str, enum.Enum):
+    FINE = "fine"
+    LICENCE_SUSPENSION = "licence_suspension"
+    LICENCE_CANCELLATION = "licence_cancellation"
+    PROSECUTION_REFERRAL = "prosecution_referral"
+
+
+class LegalActionStatus(str, enum.Enum):
+    INITIATED = "initiated"
+    IN_PROGRESS = "in_progress"
+    CONCLUDED = "concluded"

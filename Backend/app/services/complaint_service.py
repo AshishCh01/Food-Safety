@@ -11,6 +11,7 @@ from app.models.user import User
 from app.repositories import (
     audit_log_repository,
     complaint_category_repository,
+    complaint_clarification_repository,
     complaint_repository,
     complaint_sequence_repository,
     complaint_status_history_repository,
@@ -47,13 +48,13 @@ ALLOWED_TRANSITIONS: dict[ComplaintStatus, set[ComplaintStatus]] = {
         ComplaintStatus.INSUFFICIENT_EVIDENCE,
     },
     ComplaintStatus.UNDER_REVIEW: {
-        ComplaintStatus.NEEDS_INFORMATION,
+        ComplaintStatus.INSUFFICIENT_EVIDENCE,
         ComplaintStatus.VERIFIED,
         ComplaintStatus.REJECTED,
         ComplaintStatus.DUPLICATE,
         ComplaintStatus.INSUFFICIENT_EVIDENCE,
     },
-    ComplaintStatus.NEEDS_INFORMATION: {
+    ComplaintStatus.INSUFFICIENT_EVIDENCE: {
         ComplaintStatus.UNDER_REVIEW,
         ComplaintStatus.REJECTED,
     },
@@ -66,7 +67,15 @@ ALLOWED_TRANSITIONS: dict[ComplaintStatus, set[ComplaintStatus]] = {
         ComplaintStatus.RESOLVED,
         ComplaintStatus.CLOSED,
     },
+    ComplaintStatus.SAMPLE_PENDING_LAB_RESULT: {
+        ComplaintStatus.ACTION_IN_PROGRESS,
+        ComplaintStatus.LEGAL_ACTION_IN_PROGRESS,
+    },
     ComplaintStatus.ACTION_IN_PROGRESS: {
+        ComplaintStatus.RESOLVED,
+        ComplaintStatus.CLOSED,
+    },
+    ComplaintStatus.LEGAL_ACTION_IN_PROGRESS: {
         ComplaintStatus.RESOLVED,
         ComplaintStatus.CLOSED,
     },
@@ -107,6 +116,16 @@ _STATUS_NOTIFICATIONS: dict[ComplaintStatus, tuple[NotificationType, str, str]] 
         NotificationType.INSPECTION_COMPLETED,
         "Inspection Completed",
         "The inspection for your complaint {number} has been completed.",
+    ),
+    ComplaintStatus.SAMPLE_PENDING_LAB_RESULT: (
+        NotificationType.INSPECTION_COMPLETED,
+        "Sample Sent for Lab Testing",
+        "A sample has been collected from your complaint {number} and sent for lab testing. You will be notified once results are available.",
+    ),
+    ComplaintStatus.LEGAL_ACTION_IN_PROGRESS: (
+        NotificationType.LEGAL_ACTION_INITIATED,
+        "Legal Action Initiated",
+        "Based on the lab result for complaint {number}, legal proceedings have been initiated.",
     ),
     ComplaintStatus.RESOLVED: (
         NotificationType.COMPLAINT_RESOLVED,
@@ -405,7 +424,32 @@ def update_status(
         raise InvalidComplaintStatusTransitionError(
             f"Cannot transition a complaint from '{complaint.status.value}' to '{new_status.value}'."
         )
-    return _apply_transition(db, complaint, new_status, staff.user_id, reason)
+
+    updated = _apply_transition(db, complaint, new_status, staff.user_id, reason)
+
+    # When an officer requests clarification, capture the message in a
+    # ComplaintClarification row so the citizen can retrieve it easily.
+    if new_status == ComplaintStatus.INSUFFICIENT_EVIDENCE:
+        # The history row was just committed inside _apply_transition. Fetch it.
+        history = complaint.status_history[-1] if complaint.status_history else None
+        notification_repository.create(
+            db,
+            user_id=complaint.submitted_by_user_id,
+            type=NotificationType.CLARIFICATION_REQUESTED,
+            title="Information Requested",
+            message=f"The officer reviewing complaint {complaint.complaint_number} has requested additional information: {reason or ''}",
+            entity_type="complaint",
+            entity_id=complaint.id,
+        )
+        complaint_clarification_repository.create(
+            db,
+            complaint_id=complaint.id,
+            request_history_id=history.id if history else None,
+            requested_by_id=staff.id,
+        )
+        db.commit()
+
+    return updated
 
 
 def apply_system_transition(
@@ -422,6 +466,50 @@ def apply_system_transition(
     precondition before calling this - it does not check ALLOWED_TRANSITIONS.
     """
     return _apply_transition(db, complaint, new_status, changed_by_user_id, reason)
+
+
+def respond_to_clarification(
+    db: Session,
+    citizen: User,
+    complaint: Complaint,
+    response_message: str,
+) -> Complaint:
+    """Citizen responds to an officer's NEEDS_INFORMATION request.
+
+    Stores the response, flips complaint back to UNDER_REVIEW, and notifies the
+    district officer.
+    """
+    from app.utils.exceptions import ConflictError
+
+    if complaint.status != ComplaintStatus.INSUFFICIENT_EVIDENCE:
+        raise ConflictError("This complaint is not awaiting clarification.")
+    if complaint.submitted_by_user_id != citizen.id:
+        raise ConflictError("You are not authorised to respond to this complaint.")
+
+    clarification = complaint_clarification_repository.get_latest_for_complaint(db, complaint.id)
+    if clarification is not None:
+        complaint_clarification_repository.record_response(
+            db, clarification, response_message, citizen.id
+        )
+
+    updated = apply_system_transition(
+        db, complaint, ComplaintStatus.UNDER_REVIEW, citizen.id,
+        reason=f"Citizen provided requested information: {response_message}"
+    )
+
+    # Notify district officer(s)
+    for officer in staff_repository.list_by_district(db, complaint.district_id, role=UserRole.DISTRICT_OFFICER):
+        notification_repository.create(
+            db,
+            user_id=officer.user_id,
+            type=NotificationType.CITIZEN_RESPONDED,
+            title="Citizen Responded",
+            message=f"The citizen has responded to your information request on complaint {complaint.complaint_number}.",
+            entity_type="complaint",
+            entity_id=complaint.id,
+        )
+    db.commit()
+    return updated
 
 
 def to_complaint_read(complaint: Complaint) -> ComplaintRead:

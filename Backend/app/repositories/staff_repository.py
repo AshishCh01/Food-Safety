@@ -67,7 +67,7 @@ def create(
     db: Session,
     *,
     user_id: uuid.UUID,
-    district_id: uuid.UUID,
+    district_id: uuid.UUID | None,
     role: UserRole,
     employee_code: str,
     designation: str | None,
@@ -83,3 +83,20 @@ def create(
     db.commit()
     db.refresh(profile)
     return profile
+
+
+def list_by_role(
+    db: Session,
+    role: UserRole,
+    *,
+    is_active: bool = True,
+) -> list[StaffProfile]:
+    """List all staff with a given role — used for the food analyst roster."""
+    stmt = (
+        select(StaffProfile)
+        .options(joinedload(StaffProfile.user), joinedload(StaffProfile.district))
+        .where(StaffProfile.role == role)
+    )
+    if is_active is not None:
+        stmt = stmt.where(StaffProfile.is_active == is_active)
+    return list(db.execute(stmt).scalars().all())

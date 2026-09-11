@@ -128,3 +128,19 @@ export function listAdminComplaints(
 export function getAdminComplaint(complaintId, token) {
   return apiRequest(`/admin/complaints/${complaintId}`, { token });
 }
+
+export function respondToClarification(complaintId, responseMessage, token) {
+  return apiRequest(`/complaints/${complaintId}/respond`, {
+    method: 'POST',
+    token,
+    body: { response_message: responseMessage },
+  });
+}
+
+export function listCitizenSamples(complaintId, token) {
+  return apiRequest(`/complaints/${complaintId}/samples`, { token });
+}
+
+export function listCitizenLegalActions(complaintId, token) {
+  return apiRequest(`/complaints/${complaintId}/legal-actions`, { token });
+}

@@ -11,6 +11,8 @@ from app.models.user import User
 from app.schemas.complaint import ComplaintCreateRequest, ComplaintRead, PaginatedComplaints
 from app.schemas.complaint_status_history import ComplaintStatusHistoryRead
 from app.schemas.evidence import EvidenceRead
+from app.schemas.sample import SampleRead
+from app.schemas.clarification import ClarificationRespondRequest
 from app.repositories import complaint_status_history_repository
 from app.services import complaint_service, evidence_service
 from app.utils.enums import ComplaintStatus
@@ -120,3 +122,41 @@ def list_evidence(
 ) -> list[EvidenceRead]:
     complaint = complaint_service.get_complaint_for_citizen(db, current_user.id, complaint_id)
     return evidence_service.list_evidence_with_urls(db, complaint.id)
+
+@router.post("/{complaint_id}/respond", response_model=ComplaintRead)
+def respond_to_clarification(
+    complaint_id: uuid.UUID,
+    payload: ClarificationRespondRequest,
+    current_user: User = Depends(require_citizen),
+    db: Session = Depends(get_db),
+):
+    complaint = complaint_service.get_complaint_for_citizen(db, current_user.id, complaint_id)
+    updated = complaint_service.respond_to_clarification(db, current_user, complaint, payload.response_message)
+    return complaint_service.to_complaint_read(updated)
+
+@router.get("/{complaint_id}/samples", response_model=list[SampleRead])
+def get_complaint_samples(
+    complaint_id: uuid.UUID,
+    current_user: User = Depends(require_citizen),
+    db: Session = Depends(get_db),
+):
+    from app.services import sample_service
+    complaint = complaint_service.get_complaint_for_citizen(db, current_user.id, complaint_id)
+    from app.models.inspection import Inspection
+    from sqlalchemy import select
+    inspection = db.execute(select(Inspection).where(Inspection.complaint_id == complaint.id)).scalar_one_or_none()
+    if not inspection:
+        return []
+    samples = sample_service.list_for_inspection(db, inspection.id)
+    return [sample_service.to_sample_read(s) for s in samples]
+
+@router.get("/{complaint_id}/legal-actions")
+def get_complaint_legal_actions(
+    complaint_id: uuid.UUID,
+    current_user: User = Depends(require_citizen),
+    db: Session = Depends(get_db),
+):
+    from app.services import legal_action_service
+    complaint = complaint_service.get_complaint_for_citizen(db, current_user.id, complaint_id)
+    actions = legal_action_service.list_for_complaint(db, complaint.id)
+    return [legal_action_service.to_read(a) for a in actions]

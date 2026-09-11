@@ -43,6 +43,10 @@ export const NAV_ITEMS_BY_ROLE = {
     { label: 'Knowledge Base', path: '/admin/rag-documents', icon: FileText },
     { label: 'Audit Logs', path: '/admin/audit-logs', icon: ScrollText },
   ],
+  [ROLES.FOOD_ANALYST]: [
+    { label: 'Dashboard', path: '/food-analyst', icon: LayoutDashboard, end: true },
+    { label: 'Sample Review', path: '/food-analyst/samples', icon: ClipboardList },
+  ],
 };
 
 export function navItemsForRole(role) {

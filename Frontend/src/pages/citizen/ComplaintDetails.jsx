@@ -20,7 +20,13 @@ import {
   getComplaintTimeline,
   listEvidence,
   uploadEvidence,
+  respondToClarification,
+  listCitizenSamples,
+  listCitizenLegalActions,
 } from '../../services/complaintService';
+import Button from '../../components/ui/Button';
+import Textarea from '../../components/ui/Textarea';
+import FormField from '../../components/ui/FormField';
 
 function ComplaintDetails() {
   const { complaintId } = useParams();
@@ -29,7 +35,11 @@ function ComplaintDetails() {
   const [complaint, setComplaint] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [evidence, setEvidence] = useState([]);
+  const [samples, setSamples] = useState([]);
+  const [legalActions, setLegalActions] = useState([]);
   const [error, setError] = useState(null);
+  const [clarifyMessage, setClarifyMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const load = useCallback(() => {
     const token = getAccessToken();
@@ -37,11 +47,15 @@ function ComplaintDetails() {
       getComplaint(complaintId, token),
       getComplaintTimeline(complaintId, token),
       listEvidence(complaintId, token),
+      listCitizenSamples(complaintId, token).catch(() => []),
+      listCitizenLegalActions(complaintId, token).catch(() => []),
     ])
-      .then(([complaintData, timelineData, evidenceData]) => {
+      .then(([complaintData, timelineData, evidenceData, samplesData, legalData]) => {
         setComplaint(complaintData);
         setTimeline(timelineData);
         setEvidence(evidenceData);
+        setSamples(samplesData);
+        setLegalActions(legalData);
       })
       .catch((err) => setError(err.message));
   }, [complaintId, getAccessToken]);
@@ -55,6 +69,21 @@ function ComplaintDetails() {
     await uploadEvidence(complaintId, file, token);
     const evidenceData = await listEvidence(complaintId, token);
     setEvidence(evidenceData);
+  }
+
+  async function handleClarifySubmit(e) {
+    e.preventDefault();
+    if (!clarifyMessage.trim()) return;
+    setIsSubmitting(true);
+    try {
+      await respondToClarification(complaintId, clarifyMessage, getAccessToken());
+      setClarifyMessage('');
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   if (error) {
@@ -151,6 +180,77 @@ function ComplaintDetails() {
             <Card.Title>Location</Card.Title>
           </Card.Header>
           <LocationMap latitude={complaint.latitude} longitude={complaint.longitude} label={complaint.title} />
+        </Card>
+      )}
+
+      {complaint.status === 'insufficient_evidence' && (
+        <Card className="border-brand-500 bg-brand-50">
+          <Card.Header>
+            <Card.Title className="text-brand-900">Information Requested</Card.Title>
+          </Card.Header>
+          <div className="p-4 sm:p-5">
+            <p className="text-sm text-brand-800 mb-4">
+              The reviewing officer has requested additional information or clarification regarding your complaint. Please provide the details below.
+            </p>
+            <form onSubmit={handleClarifySubmit} className="space-y-4">
+              <FormField label="Your Response">
+                <Textarea 
+                  required
+                  rows={4} 
+                  value={clarifyMessage} 
+                  onChange={(e) => setClarifyMessage(e.target.value)} 
+                />
+              </FormField>
+              <Button type="submit" loading={isSubmitting}>
+                Submit Response
+              </Button>
+            </form>
+          </div>
+        </Card>
+      )}
+
+      {samples.length > 0 && (
+        <Card>
+          <Card.Header>
+            <Card.Title>Collected Samples</Card.Title>
+          </Card.Header>
+          <div className="p-4 sm:p-5">
+            <ul className="space-y-3">
+              {samples.map((s) => (
+                <li key={s.id} className="text-sm text-slate-700 flex justify-between border-b pb-2 last:border-0">
+                  <span>
+                    <strong className="font-medium text-slate-900">{s.item_description}</strong> ({s.quantity} {s.unit})
+                  </span>
+                  <Badge tone={s.status === 'result_submitted' ? 'success' : 'neutral'}>
+                    {s.status.replace('_', ' ')}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Card>
+      )}
+
+      {legalActions.length > 0 && (
+        <Card>
+          <Card.Header>
+            <Card.Title>Legal Actions Taken</Card.Title>
+          </Card.Header>
+          <div className="p-4 sm:p-5">
+            <ul className="space-y-4">
+              {legalActions.map((a) => (
+                <li key={a.id} className="text-sm text-slate-700 border-l-2 border-slate-200 pl-4">
+                  <div className="flex items-center gap-3 mb-1">
+                    <strong className="font-medium text-slate-900">{a.action_type}</strong>
+                    <Badge tone={a.status === 'concluded' ? 'success' : 'neutral'}>
+                      {a.status}
+                    </Badge>
+                  </div>
+                  <p>{a.description}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
         </Card>
       )}
 

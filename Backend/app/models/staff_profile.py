@@ -32,8 +32,8 @@ class StaffProfile(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False
     )
-    district_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("districts.id", ondelete="RESTRICT"), nullable=False, index=True
+    district_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("districts.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     role: Mapped[UserRole] = mapped_column(
         SAEnum(UserRole, name="user_role", values_callable=lambda e: [i.value for i in e]),
@@ -48,4 +48,4 @@ class StaffProfile(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="staff_profile")
-    district: Mapped["District"] = relationship(back_populates="staff_profiles")
+    district: Mapped["District | None"] = relationship(back_populates="staff_profiles")

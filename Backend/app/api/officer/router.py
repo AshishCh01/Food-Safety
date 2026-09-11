@@ -25,12 +25,16 @@ from app.schemas.complaint_status_history import ComplaintStatusHistoryRead
 from app.schemas.evidence import EvidenceRead
 from app.schemas.inspection import InspectionRead
 from app.schemas.staff import StaffRead
+from app.schemas.legal_action import LegalActionCreateRequest, LegalActionRead, LegalActionUpdateRequest
+from app.schemas.sample import SampleRead
 from app.services import (
     analytics_service,
     assignment_service,
     complaint_service,
     evidence_service,
     inspection_service,
+    legal_action_service,
+    sample_service,
     staff_service,
 )
 from app.utils.enums import ComplaintPriority, ComplaintStatus, UserRole
@@ -353,3 +357,55 @@ def get_complaint_investigation(
     if brief is None:
         raise InvestigationNotFoundError()
     return investigation_agent.to_investigation_read(brief)
+
+@router.get("/food-analysts", response_model=list[StaffRead])
+def list_food_analysts(db: Session = Depends(get_db)):
+    """Global list of all active food analysts, as they are not district-scoped."""
+    analysts = staff_repository.list_by_role(db, UserRole.FOOD_ANALYST)
+    return [staff_service.to_staff_read(p) for p in analysts]
+
+
+@router.get("/complaints/{complaint_id}/samples", response_model=list[SampleRead])
+def get_complaint_samples(
+    complaint_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+):
+    complaint = complaint_service.get_complaint_for_officer(db, staff, complaint_id)
+    inspection = inspection_service.get_inspection_for_officer(db, staff, complaint)
+    samples = sample_service.list_for_inspection(db, inspection.id)
+    return [sample_service.to_sample_read(s) for s in samples]
+
+
+@router.post("/complaints/{complaint_id}/legal-actions", response_model=LegalActionRead, status_code=status.HTTP_201_CREATED)
+def create_legal_action(
+    complaint_id: uuid.UUID,
+    payload: LegalActionCreateRequest,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+):
+    complaint = complaint_service.get_complaint_for_officer(db, staff, complaint_id)
+    action = legal_action_service.create_legal_action(db, staff, complaint, payload)
+    return legal_action_service.to_legal_action_read(action)
+
+
+@router.get("/complaints/{complaint_id}/legal-actions", response_model=list[LegalActionRead])
+def list_legal_actions(
+    complaint_id: uuid.UUID,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+):
+    complaint = complaint_service.get_complaint_for_officer(db, staff, complaint_id)
+    actions = legal_action_service.list_for_complaint(db, complaint.id)
+    return [legal_action_service.to_legal_action_read(a) for a in actions]
+
+
+@router.patch("/legal-actions/{action_id}", response_model=LegalActionRead)
+def update_legal_action(
+    action_id: uuid.UUID,
+    payload: LegalActionUpdateRequest,
+    staff: StaffProfile = Depends(get_current_staff_profile),
+    db: Session = Depends(get_db),
+):
+    action = legal_action_service.update_legal_action(db, staff, action_id, payload)
+    return legal_action_service.to_legal_action_read(action)
