@@ -24,7 +24,6 @@ const InspectorDashboard = lazy(() => import('../pages/inspector/InspectorDashbo
 const AssignedComplaints = lazy(() => import('../pages/inspector/AssignedComplaints'));
 const InspectionDetails = lazy(() => import('../pages/inspector/InspectionDetails'));
 const InspectionHistory = lazy(() => import('../pages/inspector/InspectionHistory'));
-const InspectorAssistant = lazy(() => import('../pages/inspector/InspectorAssistant'));
 
 const OfficerDashboard = lazy(() => import('../pages/officer/OfficerDashboard'));
 const ComplaintQueue = lazy(() => import('../pages/officer/ComplaintQueue'));
@@ -78,7 +77,6 @@ function AppRoutes() {
               <Route path="/inspector/assignments" element={<AssignedComplaints />} />
               <Route path="/inspector/assignments/:assignmentId" element={<InspectionDetails />} />
               <Route path="/inspector/history" element={<InspectionHistory />} />
-              <Route path="/inspector/assistant" element={<InspectorAssistant />} />
             </Route>
             <Route element={<RoleRoute allowedRoles={[ROLES.DISTRICT_OFFICER]} />}>
               <Route path="/officer" element={<OfficerDashboard />} />

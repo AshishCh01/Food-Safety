@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import Drawer from '../ui/Drawer';
 import Sidebar from './Sidebar';
 import Topbar from './Topbar';
+import GlobalInspectorAssistant from '../inspector/GlobalInspectorAssistant';
 
 /** Layout for every authenticated (citizen/inspector/officer/admin) route:
  * a persistent sidebar on desktop, collapsing into a Drawer on mobile,
@@ -33,10 +34,12 @@ function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar onMenuClick={() => setMobileNavOpen(true)} />
-        <main className="flex-1">
+        <main className="flex-1 relative">
           <Outlet />
         </main>
       </div>
+
+      <GlobalInspectorAssistant />
     </div>
   );
 }

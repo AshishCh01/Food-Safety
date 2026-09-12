@@ -1,5 +1,4 @@
 import {
-  Bot,
   Building2,
   ClipboardList,
   FileText,
@@ -29,7 +28,6 @@ export const NAV_ITEMS_BY_ROLE = {
     { label: 'Dashboard', path: '/inspector', icon: LayoutDashboard, end: true },
     { label: 'Assigned Cases', path: '/inspector/assignments', icon: ClipboardList },
     { label: 'Inspection History', path: '/inspector/history', icon: History },
-    { label: 'Inspector Assistant', path: '/inspector/assistant', icon: Bot },
   ],
   [ROLES.DISTRICT_OFFICER]: [
     { label: 'Dashboard', path: '/officer', icon: LayoutDashboard, end: true },
