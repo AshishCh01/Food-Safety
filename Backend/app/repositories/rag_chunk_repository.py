@@ -70,7 +70,9 @@ def search(
         base_stmt = base_stmt.where(RagDocument.document_type.in_(document_types))
     if business_type:
         base_stmt = base_stmt.where(
-            (RagDocument.business_type == business_type) | (RagDocument.business_type.is_(None))
+            (RagDocument.business_type == business_type) | 
+            (RagDocument.business_type.is_(None)) |
+            (RagDocument.business_type.ilike("%all food%"))
         )
 
     if db.bind is not None and db.bind.dialect.name == "postgresql":

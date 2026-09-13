@@ -134,14 +134,4 @@ export async function sendAssistantMessageStream(conversationId, question, token
     else throw err;
   }
 }
-
-// Voice channel (LiveKit) - see docs/AI_AGENTS_ARCHITECTURE.md section 7.
-// Mints a LiveKit room-join token for this conversation; the actual voice
-// turns are handled by the LiveKit worker calling the backend directly, not
-// by this frontend.
-export function startLiveKitSession(conversationId, token) {
-  return apiRequest(`/inspector/assistant/conversations/${conversationId}/livekit-session`, {
-    method: 'POST',
-    token,
-  });
-}
+

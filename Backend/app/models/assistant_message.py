@@ -40,6 +40,9 @@ class AssistantMessage(Base):
     error_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    query_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    rag_used: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     conversation: Mapped["AssistantConversation"] = relationship(back_populates="messages")

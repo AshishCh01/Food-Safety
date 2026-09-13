@@ -148,6 +148,8 @@ class AssistantMessageRead(BaseModel):
     uncertainty_reason: str | None
     error_code: str | None
     error_message: str | None
+    query_type: str | None = None
+    rag_used: bool | None = None
     created_at: datetime
 
 

@@ -67,6 +67,19 @@ function AssistantChat({ messages, onSend, isSending, error, isLoading }) {
 
 function AssistantMessageBubble({ message }) {
   const isUser = message.role === 'user';
+  const hasAppContext = message.application_data_used && message.application_data_used.length > 0;
+  const numSources = message.citations ? message.citations.length : 0;
+  
+  let contextLabel = '';
+  if (hasAppContext && numSources > 0) {
+    contextLabel = `Case context + ${numSources} regulatory source${numSources > 1 ? 's' : ''}`;
+  } else if (hasAppContext) {
+    contextLabel = 'Case context used';
+  } else if (numSources > 0) {
+    contextLabel = `${numSources} regulatory source${numSources > 1 ? 's' : ''}`;
+  }
+
+  const [expandedContext, setExpandedContext] = useState(false);
 
   return (
     <div
@@ -95,38 +108,54 @@ function AssistantMessageBubble({ message }) {
         </Alert>
       )}
 
-      {!isUser && message.citations && message.citations.length > 0 && (
+      {!isUser && contextLabel && (
         <div className="mt-2 border-t border-brand-200 pt-2">
-          <h4 className="mb-1 flex items-center gap-1 text-xs font-semibold text-slate-600">
-            <BookOpen className="size-3.5" aria-hidden="true" />
-            Sources
-          </h4>
-          <ul className="space-y-0.5 pl-1 text-xs text-slate-600">
-            {message.citations.map((citation, index) => (
-              // eslint-disable-next-line react/no-array-index-key
-              <li key={index}>
-                {citation.title}
-                {citation.source_organization ? ` (${citation.source_organization})` : ''}
-                {citation.page_number ? `, page ${citation.page_number}` : ''}
-                {citation.section_title ? `, section "${citation.section_title}"` : ''}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {!isUser && message.application_data_used && message.application_data_used.length > 0 && (
-        <div className="mt-2 border-t border-brand-200 pt-2">
-          <h4 className="mb-1 flex items-center gap-1 text-xs font-semibold text-slate-600">
+          <button
+            type="button"
+            className="mb-1 flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-800"
+            onClick={() => setExpandedContext(!expandedContext)}
+          >
             <Database className="size-3.5" aria-hidden="true" />
-            Application data used
-          </h4>
-          <ul className="space-y-0.5 pl-1 text-xs text-slate-600">
-            {message.application_data_used.map((entry, index) => (
-              // eslint-disable-next-line react/no-array-index-key
-              <li key={index}>{entry.label}</li>
-            ))}
-          </ul>
+            {contextLabel}
+            <span className="ml-1 text-[10px]">{expandedContext ? '▲' : '▼'}</span>
+          </button>
+          
+          {expandedContext && (
+            <div className="mt-2 flex flex-col gap-2">
+              {numSources > 0 && (
+                <div>
+                  <h4 className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                    <BookOpen className="size-3" aria-hidden="true" />
+                    Sources
+                  </h4>
+                  <ul className="space-y-0.5 pl-1 text-xs text-slate-600">
+                    {message.citations.map((citation, index) => (
+                      <li key={index}>
+                        {citation.title}
+                        {citation.source_organization ? ` (${citation.source_organization})` : ''}
+                        {citation.page_number ? `, page ${citation.page_number}` : ''}
+                        {citation.section_title ? `, section "${citation.section_title}"` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              
+              {hasAppContext && (
+                <div>
+                  <h4 className="flex items-center gap-1 text-[11px] font-semibold text-slate-500">
+                    <Database className="size-3" aria-hidden="true" />
+                    Application Data
+                  </h4>
+                  <ul className="space-y-0.5 pl-1 text-xs text-slate-600">
+                    {message.application_data_used.map((entry, index) => (
+                      <li key={index}>{entry.label}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

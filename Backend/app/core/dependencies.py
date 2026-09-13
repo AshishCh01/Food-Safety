@@ -103,3 +103,29 @@ def get_current_staff_profile(
     if profile is None or not profile.is_active:
         raise PermissionDeniedError("Staff profile is not active.")
     return profile
+
+
+from fastapi import Query, WebSocketException, status
+
+def get_ws_staff_profile(
+    token: str = Query(..., description="Access token for WebSocket authentication"),
+    db: Session = Depends(get_db),
+) -> StaffProfile:
+    try:
+        payload = decode_token(token, TokenType.ACCESS)
+        user_id = uuid.UUID(payload["sub"])
+    except (KeyError, ValueError, Exception) as exc:
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION) from exc
+
+    user = user_repository.get_by_id(db, user_id)
+    if user is None or not user.is_active:
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+        
+    if user.role not in [UserRole.DISTRICT_OFFICER, UserRole.INSPECTOR, UserRole.FOOD_ANALYST]:
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+
+    profile = staff_repository.get_by_user_id(db, user.id)
+    if profile is None or not profile.is_active:
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION)
+        
+    return profile

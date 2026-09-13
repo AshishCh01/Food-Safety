@@ -24,16 +24,16 @@ from app.utils.enums import INSPECTION_GUIDELINE_DOCUMENT_TYPES, REGULATION_DOCU
 
 
 def search_regulations(
-    db: Session, query: str, *, business_type: str | None = None
+    db: Session, query: str, *, business_type: str | None = None, top_k: int | None = None
 ) -> list[retrieval.RetrievedChunk]:
-    return retrieval.search(db, query, document_types=list(REGULATION_DOCUMENT_TYPES), business_type=business_type)
+    return retrieval.search(db, query, document_types=list(REGULATION_DOCUMENT_TYPES), business_type=business_type, top_k=top_k)
 
 
 def search_inspection_guidelines(
-    db: Session, query: str, *, business_type: str | None = None
+    db: Session, query: str, *, business_type: str | None = None, top_k: int | None = None
 ) -> list[retrieval.RetrievedChunk]:
     return retrieval.search(
-        db, query, document_types=list(INSPECTION_GUIDELINE_DOCUMENT_TYPES), business_type=business_type
+        db, query, document_types=list(INSPECTION_GUIDELINE_DOCUMENT_TYPES), business_type=business_type, top_k=top_k
     )
 
 
@@ -122,3 +122,49 @@ def get_evidence_analysis(db: Session, inspection: Inspection) -> list[dict]:
             }
         )
     return summaries
+
+def get_inspector_statistics(db: Session, staff: StaffProfile) -> dict:
+    from sqlalchemy import select, func
+    from app.models.assignment import Assignment
+    from app.utils.enums import AssignmentStatus
+    from app.models.inspection import Inspection
+    from app.utils.enums import InspectionStatus
+
+    assigned_complaints = db.scalar(
+        select(func.count(Assignment.id))
+        .where(Assignment.assigned_to_staff_id == staff.id)
+    )
+    completed_complaints = db.scalar(
+        select(func.count(Assignment.id))
+        .where(Assignment.assigned_to_staff_id == staff.id)
+        .where(Assignment.status == AssignmentStatus.COMPLETED)
+    )
+    pending_complaints = db.scalar(
+        select(func.count(Assignment.id))
+        .where(Assignment.assigned_to_staff_id == staff.id)
+        .where(Assignment.status != AssignmentStatus.COMPLETED)
+    )
+
+    assigned_inspections = db.scalar(
+        select(func.count(Inspection.id))
+        .where(Inspection.inspector_id == staff.id)
+    )
+    completed_inspections = db.scalar(
+        select(func.count(Inspection.id))
+        .where(Inspection.inspector_id == staff.id)
+        .where(Inspection.inspection_status == InspectionStatus.COMPLETED)
+    )
+    pending_inspections = db.scalar(
+        select(func.count(Inspection.id))
+        .where(Inspection.inspector_id == staff.id)
+        .where(Inspection.inspection_status != InspectionStatus.COMPLETED)
+    )
+
+    return {
+        "assigned_complaints": assigned_complaints,
+        "completed_complaints": completed_complaints,
+        "pending_complaints": pending_complaints,
+        "assigned_inspections": assigned_inspections,
+        "completed_inspections": completed_inspections,
+        "pending_inspections": pending_inspections,
+    }

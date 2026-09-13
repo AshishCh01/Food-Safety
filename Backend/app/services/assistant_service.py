@@ -138,12 +138,12 @@ def list_conversations_for_inspector(
     )
 
 
-def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, question: str) -> AssistantMessage:
-    return inspector_assistant_agent.ask(db, staff, conversation, question)
+def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, question: str, is_voice: bool = False) -> AssistantMessage:
+    return inspector_assistant_agent.ask(db, staff, conversation, question, is_voice=is_voice)
 
 
-def ask_stream(db: Session, staff: StaffProfile, conversation: AssistantConversation, question: str):
-    return inspector_assistant_agent.ask_stream(db, staff, conversation, question)
+def ask_stream(db: Session, staff: StaffProfile, conversation: AssistantConversation, question: str, is_voice: bool = False):
+    return inspector_assistant_agent.ask_stream(db, staff, conversation, question, is_voice=is_voice)
 
 
 def to_message_read(message: AssistantMessage) -> AssistantMessageRead:
@@ -159,6 +159,8 @@ def to_message_read(message: AssistantMessage) -> AssistantMessageRead:
         uncertainty_reason=message.uncertainty_reason,
         error_code=message.error_code,
         error_message=message.error_message,
+        query_type=message.query_type,
+        rag_used=message.rag_used,
         created_at=message.created_at,
     )
 

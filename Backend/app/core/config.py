@@ -42,12 +42,6 @@ class Settings(BaseSettings):
 
     voice_session_token_expire_minutes: int = 15
 
-    livekit_url: str = "wss://food-safety-mrqdp4r3.livekit.cloud"  # wss://<your-project>.livekit.cloud
-    livekit_api_key: SecretStr = SecretStr("")
-    livekit_api_secret: SecretStr = SecretStr("")
-    livekit_room_token_expire_minutes: int = 15
-    livekit_agent_name: str = "inspector-voice-assistant"
-
     # Tolerance window for concurrent refresh requests that both presented
     # the same (still-valid-at-request-time) refresh token - see
     # app/services/auth_service.py's reuse-detection logic. A losing
@@ -86,6 +80,9 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr = SecretStr("")
     groq_fallback_model: str = "openai/gpt-oss-20b"
     groq_request_timeout_seconds: float = 30.0
+
+    deepgram_api_key: SecretStr = SecretStr("")
+    cartesia_api_key: SecretStr = SecretStr("")
 
     rag_storage_bucket: str = "rag-documents"
     rag_max_upload_size_mb: int = 20
