@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import ComplaintStatus from '../../components/complaint/ComplaintStatus';
-import { formatStatusLabel } from '../../utils/complaintStatus';
 import EvidenceUploader from '../../components/complaint/EvidenceUploader';
 import EvidenceAnalysisPanel from '../../components/agent/EvidenceAnalysisPanel';
 
@@ -10,12 +9,14 @@ import FindingList from '../../components/inspection/FindingList';
 import ContentContainer from '../../components/layout/ContentContainer';
 import PageHeader from '../../components/layout/PageHeader';
 import Alert from '../../components/ui/Alert';
+import Badge from '../../components/ui/Badge';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
 import DetailGrid from '../../components/ui/DetailGrid';
 import ErrorState from '../../components/ui/ErrorState';
 import Skeleton from '../../components/ui/Skeleton';
 import { useAuth } from '../../hooks/useAuth';
+import { INSPECTION_STATUSES, configFor } from '../../utils/statusConfig';
 import ComplaintTriagePanel from '../../components/agent/ComplaintTriagePanel';
 import InvestigationBriefPanel from '../../components/agent/InvestigationBriefPanel';
 import {
@@ -202,8 +203,21 @@ const [showAiBrief, setShowAiBrief] = useState(true);
       <PageHeader
         title={complaint.title}
         breadcrumbs={[{ label: 'Assigned complaints', path: '/inspector/assignments' }, { label: complaint.complaint_number }]}
-        actions={<ComplaintStatus status={complaint.status} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">Case status:</span>
+            <ComplaintStatus status={complaint.status} />
+          </div>
+        }
       />
+      
+      {inspection && (
+        <div className="mb-4">
+          <p className="text-sm text-slate-500">
+            <strong>Note:</strong> The case status above reflects the overall complaint. Your task status is tracked below under "My inspection".
+          </p>
+        </div>
+      )}
 
       <Card>
         <DetailGrid>
@@ -269,13 +283,20 @@ const [showAiBrief, setShowAiBrief] = useState(true);
           <Card>
             <Card.Header>
               <Card.Title>Inspection</Card.Title>
-              {inspection.inspection_status === 'scheduled' && (
-                <Button size="sm" onClick={handleStart} disabled={isSubmitting}>
-                  Begin inspection
-                </Button>
-              )}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-400">My inspection:</span>
+                  <Badge tone={configFor(INSPECTION_STATUSES, inspection.inspection_status).tone}>
+                    {configFor(INSPECTION_STATUSES, inspection.inspection_status).label}
+                  </Badge>
+                </div>
+                {inspection.inspection_status === 'scheduled' && (
+                  <Button size="sm" onClick={handleStart} disabled={isSubmitting}>
+                    Begin inspection
+                  </Button>
+                )}
+              </div>
             </Card.Header>
-            <p className="text-sm text-slate-700">Status: {formatStatusLabel(inspection.inspection_status)}</p>
           </Card>
 
           {inspection.inspection_status !== 'completed' && (
