@@ -220,7 +220,10 @@ When providing inspection guidance, clearly identify it as guidance for the insp
 When regulatory sources are available, cite them using only the supplied [R#] source IDs.
 When application data is supplied, cite it using only the supplied [A#] IDs.
 Never invent [R#] or [A#] references.
-Use the supplied current complaint/application context to answer the user's question about the case.
+Use the supplied current complaint/application context to answer the user's question about the case. The case context may contain an existing AI Case Brief and AI Evidence Analysis.
+When the user asks about the AI analysis, summarize the supplied analysis. Do not regenerate or speculate about the analysis. Do not invent evidence findings.
+Clearly distinguish between raw evidence and AI-generated interpretation.
+If the analysis is unavailable or empty, explicitly state that the existing AI analysis is unavailable for this case. Do not claim it is unavailable if it is present in the context.
 When asked to describe or summarize the complaint, summarize only the information contained in the supplied complaint context.
 Do not require FSSAI documents for a basic complaint summary. Do not add regulatory claims unless the user asked for regulations and the appropriate RAG context was supplied.
 Do not invent missing complaint details. If a specific complaint field is unavailable, clearly say that the information is not available.
@@ -295,7 +298,10 @@ Rules:
 - NEVER write phrases such as "according to [R1]" or "as per [A2]".
 - Return a natural-language answer for the inspector.
 - If you lack a source block supporting a claim, say you do not have enough authoritative information. Never invent facts.
-- Use the supplied current complaint/application context to answer the user's question about the case.
+- Use the supplied current complaint/application context to answer the user's question about the case. The case context may contain an existing AI Case Brief and AI Evidence Analysis.
+- When the user asks about the AI analysis, summarize the supplied analysis. Do not regenerate or speculate about the analysis. Do not invent evidence findings.
+- Clearly distinguish between raw evidence and AI-generated interpretation.
+- If the analysis is unavailable or empty, explicitly state that the existing AI analysis is unavailable for this case. Do not claim it is unavailable if it is present in the context.
 - When asked to describe or summarize the complaint, summarize only the information contained in the supplied complaint context.
 - Do not require FSSAI documents for a basic complaint summary. Do not add regulatory claims unless the user asked for regulations and the appropriate RAG context was supplied.
 - Do not invent missing complaint details. If a specific complaint field is unavailable, clearly say that the information is not available.
@@ -485,10 +491,17 @@ def ask_stream(
                 app_blocks.append((f"A{app_index}", "Prior inspections at this business", history))
                 app_index += 1
                 
-        if inspection is not None and is_hybrid:
+        if complaint is not None:
+            brief = tools.get_case_brief(db, complaint)
+            if brief is not None:
+                app_blocks.append((f"A{app_index}", "AI Case Brief (advisory only)", brief))
+                app_index += 1
+
+        if inspection is not None:
             evidence = tools.get_evidence_analysis(db, inspection)
-            app_blocks.append((f"A{app_index}", "Evidence analysis for this inspection", evidence))
-            app_index += 1
+            if evidence:
+                app_blocks.append((f"A{app_index}", "AI Evidence Analysis (advisory only)", evidence))
+                app_index += 1
 
     answer_prompt = _build_streaming_answer_prompt(question, history_text, rag_blocks, app_blocks, rag_had_zero_relevant_matches)
 
@@ -666,10 +679,17 @@ def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, q
                 )
                 app_blocks.append((f"A{app_index}", "Prior inspections at this business", history))
                 app_index += 1
-        if inspection is not None and is_hybrid:
+        if complaint is not None:
+            brief = tools.get_case_brief(db, complaint)
+            if brief is not None:
+                app_blocks.append((f"A{app_index}", "AI Case Brief (advisory only)", brief))
+                app_index += 1
+
+        if inspection is not None:
             evidence = tools.get_evidence_analysis(db, inspection)
-            app_blocks.append((f"A{app_index}", "Evidence analysis for this inspection", evidence))
-            app_index += 1
+            if evidence:
+                app_blocks.append((f"A{app_index}", "AI Evidence Analysis (advisory only)", evidence))
+                app_index += 1
 
     answer_prompt = _build_answer_prompt(question, history_text, rag_blocks, app_blocks, rag_had_zero_relevant_matches)
     _t0 = time.perf_counter()

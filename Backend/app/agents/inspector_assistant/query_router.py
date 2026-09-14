@@ -28,7 +28,8 @@ def route_query(question: str, has_case_context: bool = False) -> dict:
     case_context_patterns = [
         r"this complaint", r"the complaint", r"this case", r"the case", 
         r"this business", r"the business", r"here", r"this restaurant",
-        r"this issue", r"the issue"
+        r"this issue", r"the issue", r"ai evidence analysis", r"case brief",
+        r"ai analysis", r"ai findings"
     ]
     
     is_rag = any(re.search(p, normalized) for p in rag_patterns)
@@ -52,7 +53,8 @@ def route_query(question: str, has_case_context: bool = False) -> dict:
         r"summarize", r"summary", r"status", r"complaint", r"describe", r"details",
         r"what is this", r"tell me about", r"explain", r"what happened",
         r"where is", r"location", r"business", r"who reported", r"when was", r"priority",
-        r"category", r"evidence", r"previous complaint", r"previous inspection", r"prior inspection"
+        r"category", r"evidence", r"previous complaint", r"previous inspection", r"prior inspection",
+        r"ai analysis", r"case brief", r"what did the ai find", r"ai evidence analysis"
     ]
     
     if any(re.search(p, normalized) for p in app_data_patterns):

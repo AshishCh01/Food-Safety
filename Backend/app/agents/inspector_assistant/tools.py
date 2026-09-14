@@ -168,3 +168,21 @@ def get_inspector_statistics(db: Session, staff: StaffProfile) -> dict:
         "completed_inspections": completed_inspections,
         "pending_inspections": pending_inspections,
     }
+
+def get_case_brief(db: Session, complaint: Complaint) -> dict | None:
+    from app.repositories import investigation_repository
+    from app.utils.enums import InvestigationStatus
+    
+    brief = investigation_repository.get_latest_by_complaint(db, complaint.id)
+    if brief is None or brief.status != InvestigationStatus.COMPLETED:
+        return None
+        
+    return {
+        "case_summary": brief.case_summary,
+        "complaint_patterns": brief.complaint_patterns,
+        "risk_indicators": brief.risk_indicators,
+        "suggested_actions": brief.suggested_actions,
+        "missing_information": brief.missing_information,
+        "is_uncertain": brief.is_uncertain,
+        "uncertainty_reasons": brief.uncertainty_reasons,
+    }

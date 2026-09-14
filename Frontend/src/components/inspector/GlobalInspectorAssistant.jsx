@@ -25,7 +25,6 @@ function GlobalInspectorAssistant() {
   const currentAssignmentId = match?.params?.assignmentId;
 
   const [inspectionId, setInspectionId] = useState(null);
-  const [useCaseContext, setUseCaseContext] = useState(true);
   const [complaintContext, setComplaintContext] = useState(null);
 
   const [conversation, setConversation] = useState(null);
@@ -64,7 +63,7 @@ function GlobalInspectorAssistant() {
     setIsLoading(true);
     setError(null);
 
-    const activeInspectionId = useCaseContext ? inspectionId : null;
+    const activeInspectionId = inspectionId;
     const token = getAccessToken();
 
     listAssistantConversations(token, { inspectionId: activeInspectionId })
@@ -88,7 +87,7 @@ function GlobalInspectorAssistant() {
     return () => {
       cancelled = true;
     };
-  }, [isOpen, inspectionId, useCaseContext, getAccessToken]);
+  }, [isOpen, inspectionId, getAccessToken]);
 
   const handleSend = useCallback(
     async (question) => {
@@ -152,7 +151,7 @@ function GlobalInspectorAssistant() {
   );
 
   const suggestedQuestions =
-    inspectionId && useCaseContext
+    inspectionId
       ? ['Summarize this complaint', 'What should I inspect?', 'What regulations are relevant?', 'What evidence should I verify?']
       : ['What should I check during a food inspection?', 'What are food storage requirements?', 'Explain hygiene requirements.', 'What regulations apply to food adulteration?'];
 
@@ -206,15 +205,7 @@ function GlobalInspectorAssistant() {
                   Current Case: {complaintContext?.complaint_number || 'Loading...'}
                 </span>
               </div>
-              <label className="flex items-center gap-1 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useCaseContext}
-                  onChange={(e) => setUseCaseContext(e.target.checked)}
-                  className="rounded border-slate-300 text-brand-600 focus:ring-brand-600 size-3"
-                />
-                <span className="text-slate-600">Use Case Context</span>
-              </label>
+
             </div>
           )}
 

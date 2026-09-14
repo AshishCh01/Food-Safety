@@ -1,4 +1,0 @@
-QueryType: APPLICATION_DATA
-Content: The complaint information is not available.
-Citations: 0
-App Data: 0
