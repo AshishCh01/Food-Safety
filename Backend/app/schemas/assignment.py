@@ -5,8 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas.complaint import ComplaintRead
 from app.schemas.inspection import InspectionRead
-from app.utils.enums import AssignmentStatus
-
+from app.utils.enums import AssignmentStatus, ComplaintPriority
 
 class AssignmentCreateRequest(BaseModel):
     inspector_staff_id: uuid.UUID
@@ -24,6 +23,8 @@ class AssignmentSummary(BaseModel):
     status: AssignmentStatus
     assigned_at: datetime
     due_at: datetime | None
+    priority: ComplaintPriority
+    business_name: str | None
 
 
 class AssignmentRead(AssignmentSummary):

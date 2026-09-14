@@ -1,14 +1,15 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_, case
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.assignment import Assignment
+from app.models.complaint import Complaint
 from app.utils.enums import AssignmentStatus
 
 _EAGER_OPTIONS = (
-    joinedload(Assignment.complaint),
+    joinedload(Assignment.complaint).joinedload(Complaint.business),
     joinedload(Assignment.assigned_to),
     joinedload(Assignment.assigned_by),
 )
@@ -29,18 +30,41 @@ def list_by_inspector(
     inspector_staff_id: uuid.UUID,
     *,
     status: AssignmentStatus | None = None,
+    sort: str = "due_at",
+    q: str | None = None,
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[Assignment], int]:
-    stmt = select(Assignment).where(Assignment.assigned_to_staff_id == inspector_staff_id)
+    stmt = select(Assignment).join(Assignment.complaint).where(Assignment.assigned_to_staff_id == inspector_staff_id)
     if status is not None:
         stmt = stmt.where(Assignment.status == status)
+    
+    if q:
+        stmt = stmt.where(
+            or_(
+                Complaint.complaint_number.ilike(f"%{q}%"),
+                Complaint.title.ilike(f"%{q}%")
+            )
+        )
 
     total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
 
+    if sort == "priority":
+        priority_order = case(
+            (Complaint.priority == 'critical', 4),
+            (Complaint.priority == 'high', 3),
+            (Complaint.priority == 'medium', 2),
+            (Complaint.priority == 'low', 1),
+            else_=0
+        )
+        stmt = stmt.order_by(priority_order.desc(), Assignment.due_at.asc().nullslast())
+    elif sort == "assigned_at":
+        stmt = stmt.order_by(Assignment.assigned_at.desc())
+    else:  # due_at
+        stmt = stmt.order_by(Assignment.due_at.asc().nullslast())
+
     stmt = (
         stmt.options(*_EAGER_OPTIONS)
-        .order_by(Assignment.assigned_at.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
     )

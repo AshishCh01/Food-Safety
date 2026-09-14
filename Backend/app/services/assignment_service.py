@@ -101,11 +101,13 @@ def list_for_inspector(
     inspector_staff_id: uuid.UUID,
     *,
     status,
+    sort: str = "due_at",
+    q: str | None = None,
     page: int,
     page_size: int,
 ) -> tuple[list[Assignment], int]:
     return assignment_repository.list_by_inspector(
-        db, inspector_staff_id, status=status, page=page, page_size=page_size
+        db, inspector_staff_id, status=status, sort=sort, q=q, page=page, page_size=page_size
     )
 
 
@@ -120,6 +122,8 @@ def to_assignment_summary(assignment: Assignment) -> AssignmentSummary:
         status=assignment.status,
         assigned_at=assignment.assigned_at,
         due_at=assignment.due_at,
+        priority=assignment.complaint.priority,
+        business_name=assignment.complaint.business.business_name if assignment.complaint.business else None
     )
 
 

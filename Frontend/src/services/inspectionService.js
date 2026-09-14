@@ -11,8 +11,8 @@ function withQuery(path, params = {}) {
   return query ? `${path}?${query}` : path;
 }
 
-export function listAssignments(token, { status, page = 1, pageSize = 20 } = {}) {
-  return apiRequest(withQuery('/inspector/assignments', { status, page, page_size: pageSize }), { token });
+export function listAssignments(token, { status, sort, q, page = 1, pageSize = 20 } = {}) {
+  return apiRequest(withQuery('/inspector/assignments', { status, sort, q, page, page_size: pageSize }), { token });
 }
 
 export function getAssignment(assignmentId, token) {

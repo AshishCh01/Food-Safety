@@ -74,9 +74,13 @@ def dashboard(
     }
 
 
+from typing import Literal
+
 @router.get("/assignments", response_model=PaginatedAssignments)
 def list_assignments(
     status_filter: AssignmentStatus | None = Query(default=None, alias="status"),
+    sort: Literal["due_at", "priority", "assigned_at"] = Query(default="due_at"),
+    q: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     staff: StaffProfile = Depends(get_current_staff_profile),
@@ -85,7 +89,7 @@ def list_assignments(
     # Scope always comes from the authenticated inspector's own staff
     # profile - inspectors never browse a district-wide complaint list.
     items, total = assignment_service.list_for_inspector(
-        db, staff.id, status=status_filter, page=page, page_size=page_size
+        db, staff.id, status=status_filter, sort=sort, q=q, page=page, page_size=page_size
     )
     return PaginatedAssignments(
         items=[assignment_service.to_assignment_summary(item) for item in items],
