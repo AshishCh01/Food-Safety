@@ -25,9 +25,15 @@ def route_query(question: str, has_case_context: bool = False) -> dict:
         r"inspection checklist", r"what should i focus on", r"evidence should i collect",
         r"what should i document"
     ]
+    case_context_patterns = [
+        r"this complaint", r"the complaint", r"this case", r"the case", 
+        r"this business", r"the business", r"here", r"this restaurant",
+        r"this issue", r"the issue"
+    ]
     
     is_rag = any(re.search(p, normalized) for p in rag_patterns)
     is_guidance = any(re.search(p, normalized) for p in guidance_patterns)
+    mentions_case = any(re.search(p, normalized) for p in case_context_patterns) or "complaint" in normalized
     
     if is_guidance:
         if has_case_context:
@@ -36,14 +42,17 @@ def route_query(question: str, has_case_context: bool = False) -> dict:
             return {"query_type": "REGULATION", "requires_rag": True, "requires_case": False}
             
     if is_rag:
+        # If it's a regulation question but mentions the case/complaint, it's HYBRID or needs case context
+        if has_case_context and mentions_case:
+            return {"query_type": "HYBRID", "requires_rag": True, "requires_case": True}
         return {"query_type": "REGULATION", "requires_rag": True, "requires_case": False}
         
     # Application data keywords
     app_data_patterns = [
-        r"summarize", r"summary", r"status", r"complaint number", r"where is",
-        r"location", r"business", r"who reported", r"when was", r"priority",
-        r"category", r"evidence", r"what happened", r"previous complaint",
-        r"previous inspection", r"prior inspection"
+        r"summarize", r"summary", r"status", r"complaint", r"describe", r"details",
+        r"what is this", r"tell me about", r"explain", r"what happened",
+        r"where is", r"location", r"business", r"who reported", r"when was", r"priority",
+        r"category", r"evidence", r"previous complaint", r"previous inspection", r"prior inspection"
     ]
     
     if any(re.search(p, normalized) for p in app_data_patterns):

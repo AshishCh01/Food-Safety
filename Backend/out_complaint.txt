@@ -1,0 +1,4 @@
+QueryType: APPLICATION_DATA
+Content: Complaint details are not available in the provided authorized case data.
+Citations: 0
+App Data: 0

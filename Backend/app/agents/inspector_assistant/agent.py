@@ -65,6 +65,7 @@ stable, then remove.
 
 import json
 import logging
+import re
 import time
 
 from pydantic import BaseModel, Field, ValidationError
@@ -219,6 +220,10 @@ When providing inspection guidance, clearly identify it as guidance for the insp
 When regulatory sources are available, cite them using only the supplied [R#] source IDs.
 When application data is supplied, cite it using only the supplied [A#] IDs.
 Never invent [R#] or [A#] references.
+Use the supplied current complaint/application context to answer the user's question about the case.
+When asked to describe or summarize the complaint, summarize only the information contained in the supplied complaint context.
+Do not require FSSAI documents for a basic complaint summary. Do not add regulatory claims unless the user asked for regulations and the appropriate RAG context was supplied.
+Do not invent missing complaint details. If a specific complaint field is unavailable, clearly say that the information is not available.
 
 Conversation so far:
 {history_text}
@@ -235,7 +240,7 @@ Authorized case data:
 {app_section}
 {no_results_note}
 Respond with the required JSON only.
-- answer: a clear, concise answer. Every regulatory or factual claim must be directly supported by one of the numbered blocks above ([R#] or [A#]). Never invent a citation.
+- answer: a clear, concise answer. Every regulatory or factual claim must be directly supported by one of the numbered blocks above. NEVER include the [R#] or [A#] tags in the answer string. Never invent a citation.
 - used_source_ids: the block IDs (e.g. "R1", "A2") you actually relied on. Only include IDs that appear above. Empty list if you used none.
 - is_uncertain: true if your confidence is low, sources are thin, or a required regulatory search found no matches.
 - uncertainty_reason: a short explanation when is_uncertain is true, otherwise null.
@@ -284,11 +289,17 @@ authorized field inspector in the field via voice.
 Rules:
 - Write a plain spoken answer - NO JSON, NO markdown, NO bullet-point symbols, NO asterisks.
 - Keep your answer concise and speakable (3-6 sentences maximum).
-- Every regulatory or factual claim must be supported by one of the numbered source blocks below.
-  Cite them inline using their ID, e.g. "According to [R1], ..." or "As per [A2], ...".
-- If you lack a source block supporting a claim, say you do not have enough authoritative \
-information. Never invent facts.
-- Do not claim that an answer is impossible merely because no regulatory documents were retrieved if the requested information is available in application data.
+- Every regulatory or factual claim must be supported by the numbered source blocks below.
+- NEVER output internal source IDs such as [R1], [R2], [R3], [A1], [A2].
+- NEVER mention citation codes, source IDs, block IDs, or internal reference identifiers.
+- NEVER write phrases such as "according to [R1]" or "as per [A2]".
+- Return a natural-language answer for the inspector.
+- If you lack a source block supporting a claim, say you do not have enough authoritative information. Never invent facts.
+- Use the supplied current complaint/application context to answer the user's question about the case.
+- When asked to describe or summarize the complaint, summarize only the information contained in the supplied complaint context.
+- Do not require FSSAI documents for a basic complaint summary. Do not add regulatory claims unless the user asked for regulations and the appropriate RAG context was supplied.
+- Do not invent missing complaint details. If a specific complaint field is unavailable, clearly say that the information is not available.
+- Do not generate fake citations for application data. Do not claim that an answer is impossible merely because no regulatory documents were retrieved if the requested information is available in application data.
 
 Conversation so far:
 {history_text}
@@ -516,6 +527,9 @@ def ask_stream(
     full_text = "".join(accumulated)
 
     used_source_ids = set(re.findall(r'\[(R\d+|A\d+)\]', full_text))
+    if not used_source_ids:
+        used_source_ids = {block_id for block_id, _ in rag_blocks}
+        used_source_ids.update(block_id for block_id, _, _ in app_blocks)
     rag_block_map = dict(rag_blocks)
     citations = [
         {
@@ -537,10 +551,14 @@ def ask_stream(
     is_uncertain = requires_rag and rag_had_zero_relevant_matches
     uncertainty_reason = _LOW_CONFIDENCE_UNCERTAINTY_REASON if is_uncertain else None
 
+    clean_full_text = re.sub(r'\[(?:R|A)\d+\]', '', full_text)
+    clean_full_text = re.sub(r' +([.,!?;:])', r'\1', clean_full_text)
+    clean_full_text = re.sub(r' +', ' ', clean_full_text).strip()
+
     assistant_message = AssistantMessage(
         conversation_id=conversation.id,
         role=AssistantMessageRole.ASSISTANT,
-        content=full_text,
+        content=clean_full_text,
         citations=citations or None,
         application_data_used=application_data_used or None,
         is_uncertain=is_uncertain,
@@ -682,7 +700,7 @@ def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, q
             "page_number": chunk.page_number,
             "section_title": chunk.section_title,
         }
-        for source_id in answer.used_source_ids
+        for source_id in (answer.used_source_ids or [bid for bid, _ in rag_blocks] + [bid for bid, _, _ in app_blocks])
         if (chunk := rag_block_map.get(source_id)) is not None
     ]
     application_data_used = [
@@ -696,10 +714,14 @@ def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, q
         is_uncertain = True
         uncertainty_reason = uncertainty_reason or _LOW_CONFIDENCE_UNCERTAINTY_REASON
 
+    clean_full_text = re.sub(r'\[(?:R|A)\d+\]', '', answer.answer)
+    clean_full_text = re.sub(r' +([.,!?;:])', r'\1', clean_full_text)
+    clean_full_text = re.sub(r' +', ' ', clean_full_text).strip()
+
     assistant_message = AssistantMessage(
         conversation_id=conversation.id,
         role=AssistantMessageRole.ASSISTANT,
-        content=answer.answer,
+        content=clean_full_text,
         citations=citations or None,
         application_data_used=application_data_used or None,
         is_uncertain=is_uncertain,
