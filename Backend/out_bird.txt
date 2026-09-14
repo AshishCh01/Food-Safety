@@ -1,0 +1,4 @@
+QueryType: GENERAL
+Content: The national bird of India is the Indian peafowl (Peacock).
+Citations: 6
+App Data: 0

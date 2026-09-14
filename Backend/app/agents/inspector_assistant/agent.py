@@ -457,6 +457,8 @@ def ask_stream(
             return
 
         relevant_chunks = [chunk for chunk in chunks if chunk.score >= _MIN_RAG_RELEVANCE_SCORE]
+        relevant_chunks.sort(key=lambda c: c.score, reverse=True)
+        relevant_chunks = relevant_chunks[:top_k]
         rag_blocks = [(f"R{i + 1}", chunk) for i, chunk in enumerate(relevant_chunks)]
         rag_had_zero_relevant_matches = len(rag_blocks) == 0
 
@@ -540,7 +542,9 @@ def ask_stream(
     full_text = "".join(accumulated)
 
     used_source_ids = set(re.findall(r'\[(R\d+|A\d+)\]', full_text))
-    if not used_source_ids:
+    text_lower = full_text.lower()
+    is_refusal = "don't have enough authoritative information" in text_lower or "don’t have enough authoritative information" in text_lower
+    if not used_source_ids and not is_refusal:
         used_source_ids = {block_id for block_id, _ in rag_blocks}
         used_source_ids.update(block_id for block_id, _, _ in app_blocks)
     rag_block_map = dict(rag_blocks)
@@ -558,6 +562,7 @@ def ask_stream(
     application_data_used = [
         {"tool": block_id, "label": label, "summary": data}
         for block_id, label, data in app_blocks
+        if block_id in used_source_ids
     ]
 
     # Only uncertain if RAG was required but returned no matches
@@ -643,6 +648,9 @@ def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, q
             logger.info("RETRIEVAL stage failed after %.2fs: %s", time.perf_counter() - _t0, exc.code)
             return _persist_failure(db, conversation, model_used, exc.code, exc.message)
         relevant_chunks = [chunk for chunk in chunks if chunk.score >= _MIN_RAG_RELEVANCE_SCORE]
+        relevant_chunks.sort(key=lambda c: c.score, reverse=True)
+        top_k = settings.rag_retrieval_top_k
+        relevant_chunks = relevant_chunks[:top_k]
         rag_blocks = [(f"R{i + 1}", chunk) for i, chunk in enumerate(relevant_chunks)]
         rag_had_zero_relevant_matches = len(rag_blocks) == 0
         logger.info(
@@ -712,6 +720,13 @@ def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, q
         raise InvalidAiResponseError()
 
     rag_block_map = dict(rag_blocks)
+    text_lower = answer.answer.lower()
+    is_refusal = "don't have enough authoritative information" in text_lower or "don’t have enough authoritative information" in text_lower
+    if is_refusal:
+        used_source_ids = []
+    else:
+        used_source_ids = answer.used_source_ids if answer.used_source_ids is not None else ([bid for bid, _ in rag_blocks] + [bid for bid, _, _ in app_blocks])
+
     citations = [
         {
             "document_id": chunk.document_id,
@@ -720,11 +735,12 @@ def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, q
             "page_number": chunk.page_number,
             "section_title": chunk.section_title,
         }
-        for source_id in (answer.used_source_ids or [bid for bid, _ in rag_blocks] + [bid for bid, _, _ in app_blocks])
+        for source_id in used_source_ids
         if (chunk := rag_block_map.get(source_id)) is not None
     ]
     application_data_used = [
         {"tool": block_id, "label": label, "summary": data} for block_id, label, data in app_blocks
+        if block_id in used_source_ids
     ]
 
     # Only uncertain if RAG was required but returned no matches
