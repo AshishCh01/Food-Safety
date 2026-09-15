@@ -37,6 +37,14 @@ def search_inspection_guidelines(
     )
 
 
+def search_all_knowledge(
+    db: Session, query: str, *, business_type: str | None = None, top_k: int | None = None
+) -> list[retrieval.RetrievedChunk]:
+    # Combines both regulation and guideline document types to save a PGVector round-trip
+    docs = list(REGULATION_DOCUMENT_TYPES) + list(INSPECTION_GUIDELINE_DOCUMENT_TYPES)
+    return retrieval.search(db, query, document_types=docs, business_type=business_type, top_k=top_k)
+
+
 def get_complaint(complaint: Complaint) -> dict:
     return {
         "complaint_number": complaint.complaint_number,

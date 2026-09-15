@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     # uploaded content) or embeddings (a different model produces vectors in
     # a different, non-comparable space from the stored Gemini embeddings).
     groq_api_key: SecretStr = SecretStr("")
-    groq_fallback_model: str = "openai/gpt-oss-20b"
+    groq_fallback_model: str = "groq/compound-mini"
     groq_request_timeout_seconds: float = 30.0
 
     deepgram_api_key: SecretStr = SecretStr("")

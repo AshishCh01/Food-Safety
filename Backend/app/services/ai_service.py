@@ -190,7 +190,8 @@ def stream_text_groq(prompt: str):
             if response.status_code >= 500:
                 raise GroqUnavailableError()
             if response.status_code >= 400:
-                logger.warning("Groq streaming request rejected (status=%s)", response.status_code)
+                body = response.read().decode('utf-8', errors='replace')
+                logger.warning("Groq streaming request rejected (status=%s): %s", response.status_code, body)
                 raise GroqRequestError()
 
             for line in response.iter_lines():

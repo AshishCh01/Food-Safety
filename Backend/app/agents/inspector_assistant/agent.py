@@ -438,10 +438,8 @@ def ask_stream(
     
     if requires_rag:
         try:
-            chunks: list[RetrievedChunk] = []
             top_k = settings.rag_retrieval_top_k
-            chunks += tools.search_regulations(db, question, business_type=business_type, top_k=top_k)
-            chunks += tools.search_inspection_guidelines(db, question, business_type=business_type, top_k=top_k)
+            chunks = tools.search_all_knowledge(db, question, business_type=business_type, top_k=top_k * 2)
         except AppError as exc:
             err_msg = _persist_failure(db, conversation, model_used, exc.code, exc.message)
             yield {
@@ -641,9 +639,8 @@ def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, q
 
     if requires_rag:
         try:
-            chunks: list[RetrievedChunk] = []
-            chunks += tools.search_regulations(db, question, business_type=business_type)
-            chunks += tools.search_inspection_guidelines(db, question, business_type=business_type)
+            top_k = settings.rag_retrieval_top_k
+            chunks = tools.search_all_knowledge(db, question, business_type=business_type, top_k=top_k * 2)
         except AppError as exc:
             logger.info("RETRIEVAL stage failed after %.2fs: %s", time.perf_counter() - _t0, exc.code)
             return _persist_failure(db, conversation, model_used, exc.code, exc.message)
