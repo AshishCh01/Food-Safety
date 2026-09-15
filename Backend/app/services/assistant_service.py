@@ -138,11 +138,24 @@ def list_conversations_for_inspector(
     )
 
 
+def _ensure_conversation_title(db: Session, conversation: AssistantConversation, question: str):
+    if conversation.title is None:
+        title_base = question[:50] + ("…" if len(question) > 50 else "")
+        if conversation.complaint_id and conversation.complaint:
+            conversation.title = f"{conversation.complaint.complaint_number}: {title_base}"
+        else:
+            conversation.title = title_base
+        db.add(conversation)
+        db.commit()
+
+
 def ask(db: Session, staff: StaffProfile, conversation: AssistantConversation, question: str, is_voice: bool = False) -> AssistantMessage:
+    _ensure_conversation_title(db, conversation, question)
     return inspector_assistant_agent.ask(db, staff, conversation, question, is_voice=is_voice)
 
 
 def ask_stream(db: Session, staff: StaffProfile, conversation: AssistantConversation, question: str, is_voice: bool = False):
+    _ensure_conversation_title(db, conversation, question)
     return inspector_assistant_agent.ask_stream(db, staff, conversation, question, is_voice=is_voice)
 
 

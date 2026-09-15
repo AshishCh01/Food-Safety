@@ -12,13 +12,13 @@ import Textarea from '../ui/Textarea';
 // source citations, the authorized application data it used, and any
 // uncertainty banner - everything here is advisory only, never a final
 // regulatory or legal finding. See docs/AI_AGENTS_ARCHITECTURE.md section 7.
-function AssistantChat({ messages, onSend, isSending, error, isLoading }) {
+function AssistantChat({ messages, onSend, isSending, error, isLoading, disabled = false }) {
   const [question, setQuestion] = useState('');
 
   function handleSubmit(event) {
     event.preventDefault();
     const trimmed = question.trim();
-    if (!trimmed || isSending) return;
+    if (!trimmed || isSending || disabled) return;
     onSend(trimmed);
     setQuestion('');
   }
@@ -32,7 +32,13 @@ function AssistantChat({ messages, onSend, isSending, error, isLoading }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {isLoading && <Spinner label="Loading conversation…" />}
+      {isLoading && messages.length > 0 && <Spinner label="Loading conversation…" />}
+      
+      {isLoading && messages.length === 0 && (
+        <div className="flex items-center justify-center p-4">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-600 border-t-transparent" />
+        </div>
+      )}
 
       {!isLoading && (
         <div className="flex max-h-112 flex-col gap-3 overflow-y-auto">
@@ -53,11 +59,11 @@ function AssistantChat({ messages, onSend, isSending, error, isLoading }) {
           onChange={(event) => setQuestion(event.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Ask a question…"
-          disabled={isSending || isLoading}
+          disabled={isSending || isLoading || disabled}
           rows={2}
           className="flex-1"
         />
-        <Button type="submit" disabled={isSending || isLoading || !question.trim()} loading={isSending}>
+        <Button type="submit" disabled={isSending || isLoading || disabled || !question.trim()} loading={isSending}>
           {isSending ? 'Asking…' : 'Ask'}
         </Button>
       </form>

@@ -78,12 +78,17 @@ async def generate_and_speak(
     
     sentence_buffer = ""
 
-    db = SessionLocal()
+    def _sync_ask_stream():
+        db = SessionLocal()
+        try:
+            staff = get_staff_by_id(db, staff_id)
+            conversation = assistant_service.get_conversation_for_inspector(db, staff, conversation_id)
+            yield from assistant_service.ask_stream(db, staff, conversation, question, is_voice=True)
+        finally:
+            db.close()
+
     try:
-        staff = get_staff_by_id(db, staff_id)
-        conversation = assistant_service.get_conversation_for_inspector(db, staff, conversation_id)
-        
-        async_gen = iterate_in_threadpool(assistant_service.ask_stream(db, staff, conversation, question, is_voice=True))
+        async_gen = iterate_in_threadpool(_sync_ask_stream())
         
         full_response = ""
         
@@ -147,8 +152,6 @@ async def generate_and_speak(
             await websocket.send_json({"type": "error", "message": "I couldn't process that question. Please try again."})
         except:
             pass
-    finally:
-        db.close()
 
 
 async def run_tts_loop(websocket: WebSocket, conversation_id: uuid.UUID, voice_session_id: uuid.UUID, cartesia_ws):

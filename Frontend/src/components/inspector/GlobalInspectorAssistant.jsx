@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, matchPath } from 'react-router-dom';
-import { Bot, X, Maximize2, Minimize2, CheckSquare } from 'lucide-react';
+import { Bot, X, Maximize2, Minimize2, CheckSquare, History } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import AssistantChat from '../agent/AssistantChat';
 import VoiceSessionPanel from '../agent/VoiceSessionPanel';
@@ -19,6 +19,9 @@ function GlobalInspectorAssistant() {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [conversationHistory, setConversationHistory] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
   // Determine if we are on an inspection page to grab context
   const match = matchPath({ path: '/inspector/assignments/:assignmentId', end: false }, location.pathname);
@@ -55,39 +58,53 @@ function GlobalInspectorAssistant() {
     };
   }, [currentAssignmentId, getAccessToken]);
 
-  // Load or create conversation when panel opens or when context toggles
+  // Load a new conversation when panel opens or when context toggles
   useEffect(() => {
     if (!isOpen) return;
 
     let cancelled = false;
-    setIsLoading(true);
     setError(null);
+    setConversation(null); // Clear previous conversation
 
-    const activeInspectionId = inspectionId;
-    const token = getAccessToken();
-
-    listAssistantConversations(token, { inspectionId: activeInspectionId })
-      .then((result) =>
-        result.items.length > 0
-          ? getAssistantConversation(result.items[0].id, token)
-          : createAssistantConversation(token, { inspectionId: activeInspectionId })
-      )
+    createAssistantConversation(getAccessToken(), { inspectionId })
       .then((data) => {
-        if (!cancelled) {
-          setConversation(data);
-        }
+        if (!cancelled) setConversation(data);
       })
       .catch((err) => {
         if (!cancelled) setError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
   }, [isOpen, inspectionId, getAccessToken]);
+
+  const toggleSidebar = useCallback(() => {
+    if (!isSidebarOpen) {
+      setIsSidebarOpen(true);
+      setIsExpanded(true); // force expand when sidebar opens
+      if (conversationHistory.length === 0) {
+        setIsLoadingHistory(true);
+        listAssistantConversations(getAccessToken(), {}) // load all for this inspector
+          .then((res) => setConversationHistory(res.items))
+          .catch((err) => console.error('Failed to load history:', err))
+          .finally(() => setIsLoadingHistory(false));
+      }
+    } else {
+      setIsSidebarOpen(false);
+    }
+  }, [isSidebarOpen, conversationHistory.length, getAccessToken]);
+
+  const handleNewChat = useCallback(() => {
+    setError(null);
+    setConversation(null);
+    createAssistantConversation(getAccessToken(), { inspectionId })
+      .then((data) => {
+        setConversation(data);
+        if (window.innerWidth < 640) setIsSidebarOpen(false);
+      })
+      .catch((err) => setError(err.message));
+  }, [getAccessToken, inspectionId]);
 
   const handleSend = useCallback(
     async (question) => {
@@ -179,6 +196,14 @@ function GlobalInspectorAssistant() {
             <div className="flex items-center gap-1 text-slate-500">
               <button
                 type="button"
+                className={`rounded p-1 hover:bg-brand-100 ${isSidebarOpen ? 'bg-brand-100 text-brand-700' : ''}`}
+                onClick={toggleSidebar}
+                aria-label="History"
+              >
+                <History className="size-4" />
+              </button>
+              <button
+                type="button"
                 className="rounded p-1 hover:bg-brand-100"
                 onClick={() => setIsExpanded(!isExpanded)}
                 aria-label={isExpanded ? 'Minimize' : 'Maximize'}
@@ -205,39 +230,80 @@ function GlobalInspectorAssistant() {
                   Current Case: {complaintContext?.complaint_number || 'Loading...'}
                 </span>
               </div>
-
             </div>
           )}
 
-          {/* Chat Area */}
-          <div className="flex flex-1 flex-col overflow-y-auto p-4 bg-white relative">
-            {/* Suggested Questions */}
-            {(!conversation || conversation.messages.length === 0) && !isLoading && (
-              <div className="mb-6 flex flex-col gap-2">
-                <p className="text-sm text-slate-600 font-medium">Suggested Questions</p>
-                <div className="flex flex-wrap gap-2">
-                  {suggestedQuestions.map((q, idx) => (
-                    <button
-                      key={idx}
-                      className="text-left text-xs bg-slate-50 border border-slate-200 rounded-full px-3 py-1.5 text-slate-700 hover:bg-brand-50 hover:border-brand-200 transition-colors"
-                      onClick={() => handleSend(q)}
-                      disabled={isSending || isLoading}
-                    >
-                      {q}
-                    </button>
-                  ))}
+          <div className="flex flex-1 overflow-hidden">
+            {/* Sidebar */}
+            {isSidebarOpen && (
+              <div className="w-56 flex-shrink-0 border-r border-slate-200 bg-slate-50 flex flex-col overflow-y-auto">
+                <div className="p-3 border-b border-slate-200">
+                  <button 
+                    onClick={handleNewChat}
+                    className="w-full bg-white border border-slate-300 text-slate-700 py-1.5 px-3 rounded text-sm font-medium hover:bg-slate-50 transition-colors"
+                  >
+                    + New chat
+                  </button>
                 </div>
+                {isLoadingHistory ? (
+                  <div className="p-4 text-center text-sm text-slate-500">Loading...</div>
+                ) : (
+                  <div className="flex flex-col p-2 gap-1">
+                    {conversationHistory.map(item => (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setIsLoading(true);
+                          getAssistantConversation(item.id, getAccessToken())
+                            .then(setConversation)
+                            .catch(err => setError(err.message))
+                            .finally(() => setIsLoading(false));
+                          if (window.innerWidth < 640) setIsSidebarOpen(false);
+                        }}
+                        className={`text-left p-2 rounded text-xs transition-colors ${
+                          conversation?.id === item.id ? 'bg-brand-100 text-brand-900 font-medium' : 'hover:bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        <div className="truncate">{item.title || 'New conversation'}</div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">{new Date(item.updated_at || item.created_at).toLocaleDateString()}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
-            {conversation && <VoiceSessionPanel conversationId={conversation.id} token={getAccessToken()} />}
-            <AssistantChat
-              messages={conversation ? conversation.messages : []}
-              onSend={handleSend}
-              isSending={isSending}
-              error={error}
-              isLoading={isLoading}
-            />
+            {/* Chat Area */}
+            <div className="flex flex-1 flex-col overflow-y-auto p-4 bg-white relative">
+              {/* Suggested Questions */}
+              {(!conversation || conversation.messages.length === 0) && !isLoading && (
+                <div className="mb-6 flex flex-col gap-2">
+                  <p className="text-sm text-slate-600 font-medium">Suggested Questions</p>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestedQuestions.map((q, idx) => (
+                      <button
+                        key={idx}
+                        className="text-left text-xs bg-slate-50 border border-slate-200 rounded-full px-3 py-1.5 text-slate-700 hover:bg-brand-50 hover:border-brand-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        onClick={() => handleSend(q)}
+                        disabled={isSending || isLoading || !conversation}
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {conversation && <VoiceSessionPanel conversationId={conversation.id} token={getAccessToken()} />}
+              <AssistantChat
+                messages={conversation ? conversation.messages : []}
+                onSend={handleSend}
+                isSending={isSending}
+                error={error}
+                isLoading={isLoading}
+                disabled={!conversation}
+              />
+            </div>
           </div>
         </Card>
       )}
